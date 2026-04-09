@@ -4,7 +4,11 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+# Workspace root config files — must be present before any tsc/vite/esbuild step
+# because every tsconfig.json in the repo extends tsconfig.base.json by relative path.
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY tsconfig.base.json tsconfig.json ./
+
 COPY artifacts/api-server/package.json ./artifacts/api-server/
 COPY lib/db/package.json ./lib/db/
 COPY lib/api-zod/package.json ./lib/api-zod/

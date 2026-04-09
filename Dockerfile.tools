@@ -13,9 +13,13 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
-# Copy only the package manifests needed for migrations + seeding.
-# api-zod / api-spec / api-client-react are NOT needed here.
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+# Copy workspace root config files first — tsconfig.base.json must be present
+# before tsx/drizzle-kit runs because all project tsconfigs extend it by path.
+# Only manifests needed for migrations + seeding are copied here;
+# api-zod / api-spec / api-client-react are NOT needed.
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY tsconfig.base.json tsconfig.json ./
+
 COPY lib/db/package.json ./lib/db/
 COPY scripts/package.json ./scripts/
 
