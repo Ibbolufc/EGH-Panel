@@ -6,7 +6,7 @@ ARG VITE_API_URL=/api
 
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
 COPY artifacts/egh-panel/package.json ./artifacts/egh-panel/
 COPY lib/api-client-react/package.json ./lib/api-client-react/
 COPY lib/api-spec/package.json ./lib/api-spec/
