@@ -67,41 +67,66 @@ Client → Server: `send_command`, `set_state`
 
 ## Deployment (Docker Compose — Ubuntu 22.04+)
 
-There is no single magic command that installs EGH Panel. Deployment has four distinct manual steps, described exactly below. A helper script (`scripts/install.sh`) automates steps 3–4 once you have completed steps 1–2.
+Requirements: a Linux server with internet access (root or a user with `sudo`). Docker is installed automatically if it is not already present.
 
 ---
 
-### Prerequisites
+### Option A — Interactive one-command install *(recommended)*
 
-- Docker 24+ and Docker Compose v2
-- A non-root user with access to the Docker socket
+Run this single command on your server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ibbolufc/EGH-Panel/main/scripts/bootstrap.sh | bash
+```
+
+The installer will interactively ask you for:
+
+- Your public URL or server IP (e.g. `http://203.0.113.10` or `http://panel.example.com`)
+- PostgreSQL password
+- Redis password
+- JWT secret (auto-generated if you leave it blank)
+- HTTP port (default `80`)
+- Whether to load demo accounts
+
+It then installs Docker if needed, clones the repository, writes your `.env`, builds all Docker images, runs database migrations, starts all services, and prints the panel URL and demo login details at the end.
+
+**First build takes 5–15 minutes** on a fresh VPS. Subsequent builds are fast.
+
+**After install, update with:**
+
+```bash
+cd EGH-Panel
+git pull && bash scripts/update.sh
+```
+
+---
+
+### Option B — Manual install *(if you prefer full control)*
+
+#### Prerequisites
 
 ```bash
 # Install Docker if not already installed
 curl -fsSL https://get.docker.com | bash
 sudo usermod -aG docker $USER
-newgrp docker   # or log out and back in
+newgrp docker
 docker compose version  # must print v2.x
 ```
 
----
-
-### Step 1 — Clone the repository
+#### 1 — Clone the repository
 
 ```bash
 git clone https://github.com/Ibbolufc/EGH-Panel.git
 cd EGH-Panel
 ```
 
----
-
-### Step 2 — Create and edit .env  *(manual, required)*
+#### 2 — Create and configure .env
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and set **at minimum** these two values:
+Open `.env` and set **at minimum** these two values before proceeding:
 
 ```env
 POSTGRES_PASSWORD=choose_a_strong_password
@@ -120,59 +145,27 @@ Full variable reference:
 | `FRONTEND_URL`      | No       | `http://localhost` | Your public URL. Used for CORS headers.       |
 | `HTTP_PORT`         | No       | `80`               | Host port nginx listens on                    |
 
-Do not proceed until `.env` contains real values. The install script validates them and will exit if it finds the defaults.
-
----
-
-### Step 3 — Build Docker images  *(slow on first run)*
+#### 3 — Build Docker images
 
 ```bash
 docker compose build --parallel
 ```
 
-The first build downloads Node.js base images and compiles the TypeScript source. **Expect 5–15 minutes** on a typical VPS with a fresh Docker cache. Subsequent builds are fast.
+**Expect 5–15 minutes** on a fresh VPS. Four images are built: `api`, `frontend`, `tools` (migrations/seed), and pulls `postgres` + `redis` from Docker Hub.
 
-Four images are built:
-- `api` — Express 5 backend
-- `frontend` — React SPA compiled by Vite, served by nginx
-- `tools` — drizzle-kit migrations + seed script (one-off jobs only)
-
----
-
-### Step 4 — Start postgres, migrate, seed, start services
-
-Make the scripts executable once:
+#### 4 — Run install script
 
 ```bash
 chmod +x scripts/install.sh scripts/update.sh scripts/seed.sh
-```
-
-Run the install script:
-
-```bash
 ./scripts/install.sh [--seed | --no-seed]
 ```
 
-What it does, in order:
+What it does in order: validates `.env`, starts postgres and waits for it to be ready, runs migrations, optionally seeds demo data, starts all services, and waits up to 90 s for the API health check.
 
-1. Validates `.env` (checks required vars are set and not still at default values)
-2. Starts the PostgreSQL container and waits for it to accept connections
-3. Runs `drizzle-kit push --force` via the tools container to create all tables
-4. Asks whether you want to load demo accounts and sample data  
-   — pass `--seed` to confirm automatically, `--no-seed` to skip without prompting
-5. Starts all services (`api`, `frontend`, `nginx`, `redis`) with `docker compose up -d`
-6. Waits up to 90 s for the API health check to pass, then prints `docker compose ps`
-
-If it succeeds, the final output will include a passing `curl http://localhost/api/healthz` check.
-
----
-
-### Step 5 — Verify
+#### 5 — Verify
 
 ```bash
 docker compose ps
-# api and postgres should show (healthy); frontend, nginx, redis show Up
-
 curl http://localhost/api/healthz
 # → {"status":"ok","uptime":...}
 ```
