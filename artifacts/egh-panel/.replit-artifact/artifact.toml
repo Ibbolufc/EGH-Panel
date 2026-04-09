@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "EGH Panel"
+version = "1.0.0"
+id = "artifacts/egh-panel"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20755
+
+[services.development]
+run = "pnpm --filter @workspace/egh-panel run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/egh-panel", "run", "build" ]
+publicDir = "artifacts/egh-panel/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20755"
+BASE_PATH = "/"

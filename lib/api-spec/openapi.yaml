@@ -1,22 +1,45 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: EGH Panel API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: users
+    description: User management
+  - name: servers
+    description: Game server management
+  - name: nodes
+    description: Node management
+  - name: allocations
+    description: Allocation management
+  - name: eggs
+    description: Egg/template management
+  - name: nests
+    description: Nest/category management
+  - name: activity
+    description: Activity logs
+  - name: files
+    description: File management
+  - name: backups
+    description: Backup management
+  - name: schedules
+    description: Schedule management
+  - name: dashboard
+    description: Dashboard summaries
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +47,1227 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # Auth
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current session
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me/password:
+    patch:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change current user password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordBody"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Users
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users (admin only)
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: role
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user by ID (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete user (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # Nests
+  /nests:
+    get:
+      operationId: listNests
+      tags: [nests]
+      summary: List all nests/categories
+      responses:
+        "200":
+          description: List of nests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Nest"
+    post:
+      operationId: createNest
+      tags: [nests]
+      summary: Create a nest (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNestBody"
+      responses:
+        "201":
+          description: Nest created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Nest"
+
+  /nests/{id}:
+    get:
+      operationId: getNest
+      tags: [nests]
+      summary: Get nest by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Nest details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Nest"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateNest
+      tags: [nests]
+      summary: Update nest (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNestBody"
+      responses:
+        "200":
+          description: Nest updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Nest"
+    delete:
+      operationId: deleteNest
+      tags: [nests]
+      summary: Delete nest (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # Eggs
+  /eggs:
+    get:
+      operationId: listEggs
+      tags: [eggs]
+      summary: List all eggs
+      parameters:
+        - name: nestId
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of eggs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Egg"
+    post:
+      operationId: createEgg
+      tags: [eggs]
+      summary: Create egg (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEggBody"
+      responses:
+        "201":
+          description: Egg created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Egg"
+
+  /eggs/import:
+    post:
+      operationId: importEgg
+      tags: [eggs]
+      summary: Import egg from Pterodactyl JSON (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportEggBody"
+      responses:
+        "201":
+          description: Egg imported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Egg"
+        "400":
+          description: Invalid egg JSON
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /eggs/{id}:
+    get:
+      operationId: getEgg
+      tags: [eggs]
+      summary: Get egg by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Egg details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EggDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateEgg
+      tags: [eggs]
+      summary: Update egg (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEggBody"
+      responses:
+        "200":
+          description: Egg updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Egg"
+    delete:
+      operationId: deleteEgg
+      tags: [eggs]
+      summary: Delete egg (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # Nodes
+  /nodes:
+    get:
+      operationId: listNodes
+      tags: [nodes]
+      summary: List all nodes (admin only)
+      responses:
+        "200":
+          description: List of nodes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Node"
+    post:
+      operationId: createNode
+      tags: [nodes]
+      summary: Create a node (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNodeBody"
+      responses:
+        "201":
+          description: Node created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Node"
+
+  /nodes/{id}:
+    get:
+      operationId: getNode
+      tags: [nodes]
+      summary: Get node by ID (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Node details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateNode
+      tags: [nodes]
+      summary: Update node (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNodeBody"
+      responses:
+        "200":
+          description: Node updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Node"
+    delete:
+      operationId: deleteNode
+      tags: [nodes]
+      summary: Delete node (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # Allocations
+  /nodes/{nodeId}/allocations:
+    get:
+      operationId: listAllocations
+      tags: [allocations]
+      summary: List allocations for a node (admin only)
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of allocations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Allocation"
+    post:
+      operationId: createAllocation
+      tags: [allocations]
+      summary: Create allocation for a node (admin only)
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAllocationBody"
+      responses:
+        "201":
+          description: Allocation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Allocation"
+
+  /allocations/{id}:
+    delete:
+      operationId: deleteAllocation
+      tags: [allocations]
+      summary: Delete allocation (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # Servers (Admin)
+  /servers:
+    get:
+      operationId: listServers
+      tags: [servers]
+      summary: List all servers (admin sees all, client sees own)
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: integer
+        - name: nodeId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of servers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerListResponse"
+    post:
+      operationId: createServer
+      tags: [servers]
+      summary: Create a new server (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServerBody"
+      responses:
+        "201":
+          description: Server created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /servers/{id}:
+    get:
+      operationId: getServer
+      tags: [servers]
+      summary: Get server by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Server details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateServer
+      tags: [servers]
+      summary: Update server (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateServerBody"
+      responses:
+        "200":
+          description: Server updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+    delete:
+      operationId: deleteServer
+      tags: [servers]
+      summary: Delete server (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /servers/{id}/power:
+    post:
+      operationId: serverPowerAction
+      tags: [servers]
+      summary: Send power action to server
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PowerActionBody"
+      responses:
+        "200":
+          description: Power action sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /servers/{id}/reinstall:
+    post:
+      operationId: reinstallServer
+      tags: [servers]
+      summary: Reinstall server
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reinstall initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /servers/{id}/startup:
+    get:
+      operationId: getServerStartup
+      tags: [servers]
+      summary: Get server startup variables
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Startup variables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServerVariable"
+    patch:
+      operationId: updateServerStartup
+      tags: [servers]
+      summary: Update server startup variables
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStartupBody"
+      responses:
+        "200":
+          description: Startup updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # Files
+  /servers/{id}/files:
+    get:
+      operationId: listFiles
+      tags: [files]
+      summary: List files in a directory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: path
+          in: query
+          schema:
+            type: string
+            default: "/"
+      responses:
+        "200":
+          description: File listing
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileEntry"
+
+  /servers/{id}/files/content:
+    get:
+      operationId: getFileContent
+      tags: [files]
+      summary: Get file content
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileContent"
+    put:
+      operationId: writeFileContent
+      tags: [files]
+      summary: Write file content
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WriteFileBody"
+      responses:
+        "200":
+          description: File written
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /servers/{id}/files/delete:
+    post:
+      operationId: deleteFile
+      tags: [files]
+      summary: Delete a file or folder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteFileBody"
+      responses:
+        "200":
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /servers/{id}/files/rename:
+    post:
+      operationId: renameFile
+      tags: [files]
+      summary: Rename a file or folder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameFileBody"
+      responses:
+        "200":
+          description: File renamed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /servers/{id}/files/mkdir:
+    post:
+      operationId: createDirectory
+      tags: [files]
+      summary: Create a directory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MkdirBody"
+      responses:
+        "200":
+          description: Directory created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # Backups
+  /servers/{id}/backups:
+    get:
+      operationId: listBackups
+      tags: [backups]
+      summary: List backups for a server
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of backups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Backup"
+    post:
+      operationId: createBackup
+      tags: [backups]
+      summary: Create a backup
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBackupBody"
+      responses:
+        "201":
+          description: Backup created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backup"
+
+  /servers/{id}/backups/{backupId}:
+    delete:
+      operationId: deleteBackup
+      tags: [backups]
+      summary: Delete a backup
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: backupId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /servers/{id}/backups/{backupId}/restore:
+    post:
+      operationId: restoreBackup
+      tags: [backups]
+      summary: Restore a backup
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: backupId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restore initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # Schedules
+  /servers/{id}/schedules:
+    get:
+      operationId: listSchedules
+      tags: [schedules]
+      summary: List schedules for a server
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Schedule"
+    post:
+      operationId: createSchedule
+      tags: [schedules]
+      summary: Create a schedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScheduleBody"
+      responses:
+        "201":
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+
+  /servers/{id}/schedules/{scheduleId}:
+    patch:
+      operationId: updateSchedule
+      tags: [schedules]
+      summary: Update a schedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: scheduleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScheduleBody"
+      responses:
+        "200":
+          description: Schedule updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+    delete:
+      operationId: deleteSchedule
+      tags: [schedules]
+      summary: Delete a schedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: scheduleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # Activity
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [activity]
+      summary: List activity logs (admin only)
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: integer
+        - name: serverId
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Activity logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityListResponse"
+
+  # Dashboard
+  /dashboard/admin-stats:
+    get:
+      operationId: getAdminStats
+      tags: [dashboard]
+      summary: Get admin dashboard statistics
+      responses:
+        "200":
+          description: Admin stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /dashboard/client-stats:
+    get:
+      operationId: getClientStats
+      tags: [dashboard]
+      summary: Get client dashboard statistics
+      responses:
+        "200":
+          description: Client stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientStats"
+
+  /dashboard/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Get recent activity for dashboard
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityLog"
+
+  /dashboard/server-status-summary:
+    get:
+      operationId: getServerStatusSummary
+      tags: [dashboard]
+      summary: Get count of servers by status
+      responses:
+        "200":
+          description: Server status summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerStatusSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +1278,947 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    ChangePasswordBody:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+      required:
+        - currentPassword
+        - newPassword
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required:
+        - user
+        - token
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        username:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, admin, client]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - email
+        - username
+        - firstName
+        - lastName
+        - role
+        - isActive
+        - createdAt
+
+    UserDetail:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            servers:
+              type: array
+              items:
+                $ref: "#/components/schemas/Server"
+
+    UserListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - limit
+
+    CreateUserBody:
+      type: object
+      properties:
+        email:
+          type: string
+        username:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, client]
+      required:
+        - email
+        - username
+        - firstName
+        - lastName
+        - password
+        - role
+
+    UpdateUserBody:
+      type: object
+      properties:
+        email:
+          type: string
+        username:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, admin, client]
+        isActive:
+          type: boolean
+        password:
+          type: string
+
+    Nest:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        eggCount:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - eggCount
+        - createdAt
+
+    CreateNestBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+      required:
+        - name
+
+    Egg:
+      type: object
+      properties:
+        id:
+          type: integer
+        nestId:
+          type: integer
+        nestName:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        dockerImage:
+          type: string
+        startup:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - nestId
+        - nestName
+        - name
+        - dockerImage
+        - startup
+        - createdAt
+
+    EggVariable:
+      type: object
+      properties:
+        id:
+          type: integer
+        eggId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        envVariable:
+          type: string
+        defaultValue:
+          type: string
+        userViewable:
+          type: boolean
+        userEditable:
+          type: boolean
+        rules:
+          type: string
+      required:
+        - id
+        - eggId
+        - name
+        - envVariable
+        - defaultValue
+        - userViewable
+        - userEditable
+        - rules
+
+    EggDetail:
+      allOf:
+        - $ref: "#/components/schemas/Egg"
+        - type: object
+          properties:
+            variables:
+              type: array
+              items:
+                $ref: "#/components/schemas/EggVariable"
+            dockerImages:
+              type: array
+              items:
+                type: string
+            installScript:
+              type: ["string", "null"]
+            configFiles:
+              type: ["string", "null"]
+
+    CreateEggBody:
+      type: object
+      properties:
+        nestId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        dockerImage:
+          type: string
+        startup:
+          type: string
+        installScript:
+          type: string
+        configFiles:
+          type: string
+      required:
+        - nestId
+        - name
+        - dockerImage
+        - startup
+
+    UpdateEggBody:
+      type: object
+      properties:
+        nestId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        dockerImage:
+          type: string
+        startup:
+          type: string
+        installScript:
+          type: string
+        configFiles:
+          type: string
+
+    ImportEggBody:
+      type: object
+      properties:
+        json:
+          type: object
+          description: Raw Pterodactyl egg JSON object
+      required:
+        - json
+
+    Node:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        fqdn:
+          type: string
+        scheme:
+          type: string
+          enum: [http, https]
+        daemonPort:
+          type: integer
+        locationId:
+          type: ["integer", "null"]
+        locationName:
+          type: ["string", "null"]
+        isPublic:
+          type: boolean
+        memoryTotal:
+          type: integer
+        memoryOverallocate:
+          type: integer
+        diskTotal:
+          type: integer
+        diskOverallocate:
+          type: integer
+        status:
+          type: string
+          enum: [online, offline, maintenance]
+        serverCount:
+          type: integer
+        allocationCount:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - fqdn
+        - scheme
+        - daemonPort
+        - isPublic
+        - memoryTotal
+        - memoryOverallocate
+        - diskTotal
+        - diskOverallocate
+        - status
+        - serverCount
+        - allocationCount
+        - createdAt
+
+    NodeDetail:
+      allOf:
+        - $ref: "#/components/schemas/Node"
+        - type: object
+          properties:
+            allocations:
+              type: array
+              items:
+                $ref: "#/components/schemas/Allocation"
+
+    CreateNodeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        fqdn:
+          type: string
+        scheme:
+          type: string
+          enum: [http, https]
+        daemonPort:
+          type: integer
+        isPublic:
+          type: boolean
+        memoryTotal:
+          type: integer
+        memoryOverallocate:
+          type: integer
+        diskTotal:
+          type: integer
+        diskOverallocate:
+          type: integer
+      required:
+        - name
+        - fqdn
+        - scheme
+        - daemonPort
+        - memoryTotal
+        - diskTotal
+
+    Allocation:
+      type: object
+      properties:
+        id:
+          type: integer
+        nodeId:
+          type: integer
+        ip:
+          type: string
+        port:
+          type: integer
+        alias:
+          type: ["string", "null"]
+        isAssigned:
+          type: boolean
+        serverId:
+          type: ["integer", "null"]
+        serverName:
+          type: ["string", "null"]
+      required:
+        - id
+        - nodeId
+        - ip
+        - port
+        - isAssigned
+
+    CreateAllocationBody:
+      type: object
+      properties:
+        ip:
+          type: string
+        ports:
+          type: array
+          items:
+            type: integer
+        alias:
+          type: string
+      required:
+        - ip
+        - ports
+
+    Server:
+      type: object
+      properties:
+        id:
+          type: integer
+        uuid:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        userId:
+          type: integer
+        userEmail:
+          type: string
+        nodeId:
+          type: integer
+        nodeName:
+          type: string
+        eggId:
+          type: integer
+        eggName:
+          type: string
+        allocationId:
+          type: integer
+        allocationIp:
+          type: string
+        allocationPort:
+          type: integer
+        status:
+          type: string
+          enum: [installing, install_failed, running, offline, stopping, starting, suspended]
+        memoryLimit:
+          type: integer
+        diskLimit:
+          type: integer
+        cpuLimit:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - uuid
+        - name
+        - userId
+        - userEmail
+        - nodeId
+        - nodeName
+        - eggId
+        - eggName
+        - allocationId
+        - allocationIp
+        - allocationPort
+        - status
+        - memoryLimit
+        - diskLimit
+        - cpuLimit
+        - createdAt
+
+    ServerDetail:
+      allOf:
+        - $ref: "#/components/schemas/Server"
+        - type: object
+          properties:
+            variables:
+              type: array
+              items:
+                $ref: "#/components/schemas/ServerVariable"
+            dockerImage:
+              type: string
+            startup:
+              type: string
+
+    ServerListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Server"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - limit
+
+    CreateServerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        userId:
+          type: integer
+        nodeId:
+          type: integer
+        eggId:
+          type: integer
+        allocationId:
+          type: integer
+        memoryLimit:
+          type: integer
+        diskLimit:
+          type: integer
+        cpuLimit:
+          type: integer
+        startup:
+          type: string
+        dockerImage:
+          type: string
+        variables:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - name
+        - userId
+        - nodeId
+        - eggId
+        - allocationId
+        - memoryLimit
+        - diskLimit
+        - cpuLimit
+
+    UpdateServerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        userId:
+          type: integer
+        memoryLimit:
+          type: integer
+        diskLimit:
+          type: integer
+        cpuLimit:
+          type: integer
+        status:
+          type: string
+          enum: [installing, install_failed, running, offline, stopping, starting, suspended]
+
+    PowerActionBody:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [start, stop, restart, kill]
+      required:
+        - action
+
+    ServerVariable:
+      type: object
+      properties:
+        id:
+          type: integer
+        serverId:
+          type: integer
+        name:
+          type: string
+        envVariable:
+          type: string
+        value:
+          type: string
+        description:
+          type: ["string", "null"]
+        userViewable:
+          type: boolean
+        userEditable:
+          type: boolean
+        rules:
+          type: string
+      required:
+        - id
+        - serverId
+        - name
+        - envVariable
+        - value
+        - userViewable
+        - userEditable
+        - rules
+
+    UpdateStartupBody:
+      type: object
+      properties:
+        variables:
+          type: object
+          additionalProperties:
+            type: string
+        startup:
+          type: string
+      required:
+        - variables
+
+    FileEntry:
+      type: object
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        size:
+          type: integer
+        isDirectory:
+          type: boolean
+        isFile:
+          type: boolean
+        modifiedAt:
+          type: string
+      required:
+        - name
+        - path
+        - size
+        - isDirectory
+        - isFile
+        - modifiedAt
+
+    FileContent:
+      type: object
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+      required:
+        - path
+        - content
+
+    WriteFileBody:
+      type: object
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+      required:
+        - path
+        - content
+
+    DeleteFileBody:
+      type: object
+      properties:
+        path:
+          type: string
+      required:
+        - path
+
+    RenameFileBody:
+      type: object
+      properties:
+        path:
+          type: string
+        newName:
+          type: string
+      required:
+        - path
+        - newName
+
+    MkdirBody:
+      type: object
+      properties:
+        path:
+          type: string
+      required:
+        - path
+
+    Backup:
+      type: object
+      properties:
+        id:
+          type: integer
+        serverId:
+          type: integer
+        name:
+          type: string
+        size:
+          type: integer
+        status:
+          type: string
+          enum: [created, in_progress, completed, failed, deleted]
+        createdAt:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+      required:
+        - id
+        - serverId
+        - name
+        - size
+        - status
+        - createdAt
+
+    CreateBackupBody:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
+    Schedule:
+      type: object
+      properties:
+        id:
+          type: integer
+        serverId:
+          type: integer
+        name:
+          type: string
+        cronMinute:
+          type: string
+        cronHour:
+          type: string
+        cronDayOfMonth:
+          type: string
+        cronMonth:
+          type: string
+        cronDayOfWeek:
+          type: string
+        action:
+          type: string
+          enum: [start, stop, restart, kill, backup]
+        isEnabled:
+          type: boolean
+        lastRunAt:
+          type: ["string", "null"]
+        nextRunAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - serverId
+        - name
+        - cronMinute
+        - cronHour
+        - cronDayOfMonth
+        - cronMonth
+        - cronDayOfWeek
+        - action
+        - isEnabled
+        - createdAt
+
+    CreateScheduleBody:
+      type: object
+      properties:
+        name:
+          type: string
+        cronMinute:
+          type: string
+        cronHour:
+          type: string
+        cronDayOfMonth:
+          type: string
+        cronMonth:
+          type: string
+        cronDayOfWeek:
+          type: string
+        action:
+          type: string
+          enum: [start, stop, restart, kill, backup]
+        isEnabled:
+          type: boolean
+      required:
+        - name
+        - cronMinute
+        - cronHour
+        - cronDayOfMonth
+        - cronMonth
+        - cronDayOfWeek
+        - action
+
+    ActivityLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: ["integer", "null"]
+        userEmail:
+          type: ["string", "null"]
+        serverId:
+          type: ["integer", "null"]
+        serverName:
+          type: ["string", "null"]
+        event:
+          type: string
+        description:
+          type: string
+        ip:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - event
+        - description
+        - createdAt
+
+    ActivityListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityLog"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - limit
+
+    AdminStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalServers:
+          type: integer
+        totalNodes:
+          type: integer
+        totalEggs:
+          type: integer
+        activeServers:
+          type: integer
+        offlineServers:
+          type: integer
+        installingServers:
+          type: integer
+        suspendedServers:
+          type: integer
+        onlineNodes:
+          type: integer
+        offlineNodes:
+          type: integer
+      required:
+        - totalUsers
+        - totalServers
+        - totalNodes
+        - totalEggs
+        - activeServers
+        - offlineServers
+        - installingServers
+        - suspendedServers
+        - onlineNodes
+        - offlineNodes
+
+    ClientStats:
+      type: object
+      properties:
+        totalServers:
+          type: integer
+        runningServers:
+          type: integer
+        offlineServers:
+          type: integer
+        totalDiskUsed:
+          type: integer
+        totalMemoryAllocated:
+          type: integer
+      required:
+        - totalServers
+        - runningServers
+        - offlineServers
+        - totalDiskUsed
+        - totalMemoryAllocated
+
+    ServerStatusSummary:
+      type: object
+      properties:
+        running:
+          type: integer
+        offline:
+          type: integer
+        installing:
+          type: integer
+        suspended:
+          type: integer
+        starting:
+          type: integer
+        stopping:
+          type: integer
+      required:
+        - running
+        - offline
+        - installing
+        - suspended
+        - starting
+        - stopping
