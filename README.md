@@ -88,9 +88,11 @@ The installer will interactively ask you for:
 - HTTP port (default `80`)
 - Whether to load demo accounts
 
-It then installs Docker if needed, clones the repository, writes your `.env`, builds all Docker images, runs database migrations, starts all services, and prints the panel URL and demo login details at the end.
+It then installs Docker if needed, clones the repository, writes your `.env`, builds all Docker images, runs database migrations, starts all services, and prints the panel URL at the end.
 
 **First build takes 5–15 minutes** on a fresh VPS. Subsequent builds are fast.
+
+**After the installer finishes, open the URL it prints — you'll be taken straight to the setup page to create your administrator account** (see [First-Time Setup](#first-time-setup) below).
 
 **After install, update with:**
 
@@ -170,13 +172,38 @@ curl http://localhost/api/healthz
 # → {"status":"ok","uptime":...}
 ```
 
-Open `http://your-server-ip` in a browser and log in.
+Open `http://your-server-ip` in a browser — on a fresh install with no users you will be taken straight to the setup page (see [First-Time Setup](#first-time-setup) below).
+
+---
+
+## First-Time Setup
+
+On a fresh install with **no existing user accounts**, EGH Panel automatically shows a setup page instead of the normal login screen. This is the recommended and secure way to create your first administrator account.
+
+**What happens:**
+
+1. Open the panel URL in your browser.
+2. The setup page appears — enter your name, username, email, and a strong password (12+ characters, mixed case, at least one number).
+3. Click **Create Administrator Account**.
+4. You are immediately logged in as `super_admin` and taken to the admin dashboard.
+5. The setup page is permanently disabled — it returns `403` from that point on and the frontend never shows it again.
+
+**Password requirements enforced on the form and server:**
+- Minimum 12 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one number
+
+**Security design:**
+- The `POST /api/setup/complete` endpoint verifies zero users exist before creating the account, even under concurrent requests — no race condition.
+- The same strict rate-limit that protects `/api/auth/login` is applied to the setup endpoint.
+- Once any user account exists, `GET /api/setup/status` returns `{ "setupRequired": false }` and the frontend redirects all `/setup` visits to `/login`.
 
 ---
 
 ## Demo Accounts
 
-Created by the seed script. **Remove or change these before exposing the panel to the internet.**
+The seed script creates sample accounts for **local development and testing only**. Do not use these on a production server.
 
 | Email                  | Password  | Role        |
 |------------------------|-----------|-------------|
@@ -184,13 +211,13 @@ Created by the seed script. **Remove or change these before exposing the panel t
 | admin2@eghpanel.com    | admin123  | admin       |
 | client@example.com     | client123 | client      |
 
-To skip demo data on a production install:
+Running the seed also disables the setup page (because user rows now exist). On a production install, **do not seed** — use the setup page instead:
 
 ```bash
 ./scripts/install.sh --no-seed
 ```
 
-Demo data is never loaded automatically. It is only loaded when you explicitly run the seed.
+Demo data is never loaded automatically. It is only loaded when you explicitly run the seed or pass `--seed` to the install script.
 
 ---
 
