@@ -2,8 +2,17 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import type { Request, Response, NextFunction } from "express";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "egh-panel-secret-change-in-production";
-const JWT_EXPIRES_IN = "7d";
+const _jwtSecret = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? "7d";
+
+if (!_jwtSecret) {
+  throw new Error(
+    "JWT_SECRET environment variable is required but was not set. " +
+    "Generate one with: openssl rand -hex 64",
+  );
+}
+
+const JWT_SECRET: string = _jwtSecret;
 
 export function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);

@@ -1,0 +1,40 @@
+# Dependencies (installed fresh during build)
+node_modules
+**/node_modules
+
+# Build output (built fresh during build)
+dist
+**/dist
+.expo
+**/.expo
+
+# Environment / secrets — never bake into image
+.env
+.env.*
+!.env.example
+
+# Version control
+.git
+.gitignore
+
+# Replit and editor metadata
+.replit
+replit.nix
+.local
+.cache
+.upm
+.config
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test and dev artifacts
+coverage
+*.test.ts
+*.spec.ts
+
+# OS junk
+.DS_Store
+Thumbs.db

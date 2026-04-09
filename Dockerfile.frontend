@@ -4,7 +4,7 @@ WORKDIR /app
 
 ARG VITE_API_URL=/api
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY artifacts/egh-panel/package.json ./artifacts/egh-panel/
