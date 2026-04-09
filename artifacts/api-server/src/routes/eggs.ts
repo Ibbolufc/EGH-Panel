@@ -1,19 +1,123 @@
+/**
+ * Eggs & Nests Routes
+ *
+ * Supports manual egg creation and Pterodactyl egg JSON import.
+ * Import endpoint validates the egg JSON structure before inserting.
+ *
+ * Preview mode: POST /api/eggs/import/preview returns parsed egg data
+ * without writing to the database — useful for showing a confirmation UI.
+ */
+
 import { Router } from "express";
 import { eq, and, ilike } from "drizzle-orm";
+import { z } from "zod";
 import { db, eggsTable, eggVariablesTable, nestsTable } from "@workspace/db";
-import { CreateEggBody, UpdateEggBody, ImportEggBody } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
+import { asyncHandler } from "../middleware/errorHandler";
+import { parseIntParam, validateBody } from "../middleware/validate";
 
 const router: Router = Router();
 
-router.get("/eggs", requireAuth, async (req, res): Promise<void> => {
-  const nestIdRaw = req.query.nestId;
+const PterodactylVariableSchema = z.object({
+  name: z.string(),
+  description: z.string().optional().default(""),
+  env_variable: z.string(),
+  default_value: z.string().optional().default(""),
+  user_viewable: z.union([z.boolean(), z.number()]).optional().default(true),
+  user_editable: z.union([z.boolean(), z.number()]).optional().default(false),
+  rules: z.string().optional().default(""),
+});
+
+const PterodactylEggSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional().default(""),
+  startup: z.string().min(1),
+  docker_image: z.string().optional(),
+  docker_images: z.record(z.string(), z.string()).optional(),
+  variables: z.array(PterodactylVariableSchema).optional().default([]),
+  script: z
+    .object({
+      install: z.string().optional(),
+    })
+    .optional(),
+  nest: z
+    .object({
+      name: z.string().optional(),
+    })
+    .optional(),
+  meta: z.object({ version: z.string().optional() }).optional(),
+});
+
+const ImportEggBody = z.object({
+  json: z.unknown(),
+  nestId: z.number().int().positive().optional(),
+});
+
+const CreateEggBody = z.object({
+  nestId: z.number().int().positive(),
+  name: z.string().min(1).max(255),
+  description: z.string().optional(),
+  dockerImage: z.string().min(1),
+  startup: z.string().min(1),
+  installScript: z.string().optional(),
+});
+
+const UpdateEggBody = z.object({
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().optional(),
+  dockerImage: z.string().min(1).optional(),
+  startup: z.string().min(1).optional(),
+  installScript: z.string().optional(),
+});
+
+function parsePterodactylEgg(raw: unknown) {
+  const parsed = PterodactylEggSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
+  }
+
+  const data = parsed.data;
+
+  const dockerImages =
+    data.docker_images
+      ? Object.keys(data.docker_images)
+      : data.docker_image
+        ? [data.docker_image]
+        : [];
+
+  const dockerImage =
+    data.docker_image ?? dockerImages[0] ?? "ghcr.io/pterodactyl/yolks:debian";
+
+  return {
+    success: true as const,
+    egg: {
+      name: data.name,
+      description: data.description ?? null,
+      startup: data.startup,
+      dockerImage,
+      dockerImages,
+      installScript: data.script?.install ?? null,
+      nestName: data.nest?.name ?? "Imported",
+    },
+    variables: (data.variables ?? []).map((v) => ({
+      name: v.name,
+      description: v.description || null,
+      envVariable: v.env_variable,
+      defaultValue: String(v.default_value ?? ""),
+      userViewable: Boolean(v.user_viewable),
+      userEditable: Boolean(v.user_editable),
+      rules: v.rules || "",
+    })),
+  };
+}
+
+router.get("/eggs", requireAuth, asyncHandler(async (req, res) => {
+  const nestId = req.query.nestId ? parseInt(String(req.query.nestId), 10) : undefined;
   const search = typeof req.query.search === "string" ? req.query.search : undefined;
-  const nestId = nestIdRaw ? parseInt(String(nestIdRaw), 10) : undefined;
 
   const conditions = [];
-  if (nestId) conditions.push(eq(eggsTable.nestId, nestId));
+  if (nestId && !Number.isNaN(nestId)) conditions.push(eq(eggsTable.nestId, nestId));
   if (search) conditions.push(ilike(eggsTable.name, `%${search}%`));
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -33,95 +137,88 @@ router.get("/eggs", requireAuth, async (req, res): Promise<void> => {
     .where(whereClause);
 
   res.json(eggs.map((e) => ({ ...e, nestName: e.nestName ?? "Unknown" })));
-});
+}));
 
-router.post("/eggs", requireAdmin, async (req, res): Promise<void> => {
-  const parsed = CreateEggBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+router.post("/eggs", requireAdmin, validateBody(CreateEggBody), asyncHandler(async (req, res) => {
+  const data = req.body as z.infer<typeof CreateEggBody>;
+  const [egg] = await db.insert(eggsTable).values(data).returning();
+  const [nest] = await db.select({ name: nestsTable.name }).from(nestsTable).where(eq(nestsTable.id, egg.nestId));
+  res.status(201).json({ ...egg, nestName: nest?.name ?? "Unknown" });
+}));
+
+router.post("/eggs/import/preview", requireAdmin, validateBody(ImportEggBody), asyncHandler(async (req, res) => {
+  const { json } = req.body as z.infer<typeof ImportEggBody>;
+  const result = parsePterodactylEgg(json);
+
+  if (!result.success) {
+    res.status(400).json({ error: "Invalid Pterodactyl egg JSON", details: result.error });
     return;
   }
 
-  const [egg] = await db.insert(eggsTable).values(parsed.data).returning();
-  const nest = await db.select({ name: nestsTable.name }).from(nestsTable).where(eq(nestsTable.id, egg.nestId));
+  res.json({ egg: result.egg, variables: result.variables });
+}));
 
-  res.status(201).json({ ...egg, nestName: nest[0]?.name ?? "Unknown" });
-});
+router.post("/eggs/import", requireAdmin, validateBody(ImportEggBody), asyncHandler(async (req, res) => {
+  const { json, nestId: overrideNestId } = req.body as z.infer<typeof ImportEggBody>;
+  const result = parsePterodactylEgg(json);
 
-// Import from Pterodactyl egg JSON
-router.post("/eggs/import", requireAdmin, async (req, res): Promise<void> => {
-  const parsed = ImportEggBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request body" });
+  if (!result.success) {
+    res.status(400).json({ error: "Invalid Pterodactyl egg JSON", details: result.error });
     return;
   }
 
-  const eggJson = parsed.data.json as Record<string, unknown>;
+  const { egg: eggData, variables } = result;
 
-  // Parse Pterodactyl egg format
-  const name = String(eggJson.name ?? "Imported Egg");
-  const description = eggJson.description ? String(eggJson.description) : null;
-  const startup = String(eggJson.startup ?? "");
-  const dockerImage = typeof eggJson.docker_image === "string"
-    ? eggJson.docker_image
-    : Object.keys((eggJson.docker_images as Record<string, string>) ?? {})[0] ?? "ghcr.io/pterodactyl/yolks:debian";
-
-  const dockerImages = typeof eggJson.docker_images === "object" && eggJson.docker_images !== null
-    ? Object.keys(eggJson.docker_images as Record<string, string>)
-    : typeof eggJson.docker_image === "string" ? [eggJson.docker_image] : [];
-
-  const installScript = (eggJson.script as Record<string, unknown>)?.install
-    ? String((eggJson.script as Record<string, unknown>).install)
-    : null;
-
-  const nestName = eggJson.nest ? String((eggJson.nest as Record<string, unknown>).name ?? "Imported") : "Imported";
-
-  // Find or create nest
-  let [nest] = await db.select().from(nestsTable).where(eq(nestsTable.name, nestName));
-  if (!nest) {
-    const [created] = await db.insert(nestsTable).values({ name: nestName }).returning();
-    nest = created;
+  let nestId = overrideNestId;
+  if (!nestId) {
+    let [nest] = await db.select().from(nestsTable).where(eq(nestsTable.name, eggData.nestName));
+    if (!nest) {
+      const [created] = await db.insert(nestsTable).values({ name: eggData.nestName }).returning();
+      nest = created;
+    }
+    nestId = nest.id;
   }
 
-  // Insert egg
   const [egg] = await db.insert(eggsTable).values({
-    nestId: nest.id,
-    name,
-    description,
-    dockerImage,
-    dockerImages,
-    startup,
-    installScript,
+    nestId,
+    name: eggData.name,
+    description: eggData.description,
+    dockerImage: eggData.dockerImage,
+    dockerImages: eggData.dockerImages,
+    startup: eggData.startup,
+    installScript: eggData.installScript,
   }).returning();
 
-  // Insert variables
-  const variables = Array.isArray(eggJson.variables) ? eggJson.variables as Record<string, unknown>[] : [];
-  for (const v of variables) {
-    await db.insert(eggVariablesTable).values({
-      eggId: egg.id,
-      name: String(v.name ?? ""),
-      description: v.description ? String(v.description) : null,
-      envVariable: String(v.env_variable ?? ""),
-      defaultValue: String(v.default_value ?? ""),
-      userViewable: String(v.user_viewable ?? "true"),
-      userEditable: String(v.user_editable ?? "false"),
-      rules: String(v.rules ?? ""),
-    });
+  if (variables.length > 0) {
+    await db.insert(eggVariablesTable).values(
+      variables.map((v) => ({
+        eggId: egg.id,
+        name: v.name,
+        description: v.description,
+        envVariable: v.envVariable,
+        defaultValue: v.defaultValue,
+        userViewable: String(v.userViewable),
+        userEditable: String(v.userEditable),
+        rules: v.rules,
+      })),
+    );
   }
+
+  const [nest] = await db.select({ name: nestsTable.name }).from(nestsTable).where(eq(nestsTable.id, nestId));
 
   await logActivity({
     req,
     userId: req.user?.userId,
     event: "egg.imported",
-    description: `Imported egg: ${name}`,
+    description: `Imported egg: "${egg.name}" into nest "${nest?.name}"`,
   });
 
-  res.status(201).json({ ...egg, nestName: nest.name });
-});
+  res.status(201).json({ ...egg, nestName: nest?.name ?? "Unknown", variableCount: variables.length });
+}));
 
-router.get("/eggs/:id", requireAuth, async (req, res): Promise<void> => {
-  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const id = parseInt(rawId, 10);
+router.get("/eggs/:id", requireAuth, asyncHandler(async (req, res) => {
+  const id = parseIntParam(req, res, "id");
+  if (id === null) return;
 
   const [egg] = await db
     .select({
@@ -157,31 +254,25 @@ router.get("/eggs/:id", requireAuth, async (req, res): Promise<void> => {
       userEditable: v.userEditable === "true",
     })),
   });
-});
+}));
 
-router.patch("/eggs/:id", requireAdmin, async (req, res): Promise<void> => {
-  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const id = parseInt(rawId, 10);
+router.patch("/eggs/:id", requireAdmin, validateBody(UpdateEggBody), asyncHandler(async (req, res) => {
+  const id = parseIntParam(req, res, "id");
+  if (id === null) return;
 
-  const parsed = UpdateEggBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const [egg] = await db.update(eggsTable).set(parsed.data).where(eq(eggsTable.id, id)).returning();
+  const [egg] = await db.update(eggsTable).set(req.body as z.infer<typeof UpdateEggBody>).where(eq(eggsTable.id, id)).returning();
   if (!egg) {
     res.status(404).json({ error: "Egg not found" });
     return;
   }
 
-  const nest = await db.select({ name: nestsTable.name }).from(nestsTable).where(eq(nestsTable.id, egg.nestId));
-  res.json({ ...egg, nestName: nest[0]?.name ?? "Unknown" });
-});
+  const [nest] = await db.select({ name: nestsTable.name }).from(nestsTable).where(eq(nestsTable.id, egg.nestId));
+  res.json({ ...egg, nestName: nest?.name ?? "Unknown" });
+}));
 
-router.delete("/eggs/:id", requireAdmin, async (req, res): Promise<void> => {
-  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const id = parseInt(rawId, 10);
+router.delete("/eggs/:id", requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseIntParam(req, res, "id");
+  if (id === null) return;
 
   const [egg] = await db.delete(eggsTable).where(eq(eggsTable.id, id)).returning();
   if (!egg) {
@@ -189,6 +280,6 @@ router.delete("/eggs/:id", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
   res.sendStatus(204);
-});
+}));
 
 export default router;

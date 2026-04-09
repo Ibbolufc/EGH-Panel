@@ -1,0 +1,205 @@
+Take the current EGH Panel codebase and do a serious second-pass upgrade. Keep what already works, but now clean it up into a more production-minded structure and replace MVP shortcuts where possible.
+
+Main objective
+
+Turn the current build from a functional MVP/prototype into a cleaner, more realistic self-hosted product foundation for a real hosting business.
+
+Priority goals
+
+1. Audit the whole repo first
+   
+   - identify what is fully implemented
+   - identify what is scaffolded/mocked
+   - identify weak points, shortcuts, or messy architecture
+   - identify anything that does not match the requested stack or deployment goal
+
+2. Refactor toward the intended architecture
+   I originally wanted:
+   
+   - Frontend: Next.js
+   - Backend/API: NestJS
+   - Database: PostgreSQL
+   - Cache/queue: Redis
+   - Realtime: WebSockets
+   - Deployment: Docker Compose
+   
+   If the current build does not cleanly match that, refactor it closer to this structure.
+
+3. Keep it self-hosted and GitHub-ready
+   
+   - no Replit-only dependencies
+   - no platform lock-in
+   - no hidden magic
+   - everything must remain deployable on my own Ubuntu server
+
+What I want done now
+
+A. Full codebase audit
+
+Before making changes, generate a clear internal audit of:
+
+- current frontend stack
+- current backend stack
+- database setup
+- auth setup
+- egg import implementation
+- node/provider implementation
+- file manager implementation
+- backups/schedules implementation
+- deployment setup
+- security concerns
+- mocked vs real functionality
+
+Then use that audit to guide the refactor.
+
+B. Clean architecture refactor
+
+Refactor the repo into a cleaner structure with:
+
+- separate frontend and backend apps
+- shared types/interfaces where sensible
+- modular services
+- cleaner route/module organization
+- less duplicated code
+- improved naming consistency
+- proper environment variable handling
+- sensible config files
+
+If needed, migrate the frontend to Next.js and the backend to NestJS properly.
+
+C. Strengthen auth and permissions
+
+Improve:
+
+- role-based access control
+- route protection
+- auth middleware/guards
+- token handling
+- password validation
+- session or JWT flow consistency
+- permission boundaries between Super Admin, Admin, and Client
+
+Make sure clients cannot access admin resources.
+
+D. Improve egg support
+
+Upgrade the egg import system so it is closer to real-world usability:
+
+- stronger validation of Pterodactyl egg JSON
+- better parsing logic
+- cleaner preview before import
+- better storage structure for variables and metadata
+- support future expansion
+- clearer mapping between imported eggs and internal server templates
+
+E. Strengthen node/provider architecture
+
+The current node control layer should be improved into a proper abstraction.
+
+Create a clear provider architecture for:
+
+- node registration
+- allocations
+- provisioning requests
+- power actions
+- install state
+- status updates
+- console streams
+- file operations
+- backups
+- schedules
+
+Keep mock providers if needed for MVP, but structure them so a Wings-compatible provider or custom agent can be dropped in later without rewriting the whole app.
+
+F. Make realtime cleaner
+
+Improve realtime implementation for:
+
+- console output
+- server status changes
+- install progress
+- power state changes
+
+If some parts must stay mocked, keep the architecture real and clean.
+
+G. Improve file manager, backups, and schedules
+
+Upgrade these from basic placeholders into stronger MVP implementations:
+
+- better file browser behaviour
+- file edit/save flow
+- upload/download handling
+- create/delete directories/files where sensible
+- backup creation/list/delete flow
+- schedules CRUD with cleaner validation
+- clearer server-side structure
+
+H. Production hardening
+
+Improve:
+
+- input validation
+- error handling
+- API response consistency
+- logging
+- security basics
+- safer defaults
+- environment handling
+- Docker reliability
+- startup scripts
+- health checks
+
+I. Deployment cleanup
+
+Make self-hosting much cleaner.
+
+Ensure the repo includes:
+
+- proper "docker-compose.yml"
+- production-ready Dockerfiles
+- ".env.example"
+- migration commands
+- seed commands
+- health checks
+- clear reverse proxy assumptions
+- Ubuntu deployment instructions
+- GitHub-ready repo structure
+
+J. Documentation
+
+Update the README to include:
+
+- project overview
+- architecture
+- stack used
+- local development instructions
+- production deployment instructions
+- environment variables
+- demo accounts
+- what is complete
+- what is still scaffolded/mock
+- next recommended milestones
+
+Important instructions
+
+- Do not throw away working code unless necessary
+- improve the current build instead of restarting blindly
+- keep the premium dark EGH Panel branding and UI style
+- keep the system self-hostable
+- keep GitHub export in mind at all times
+- write production-minded code, not hacky prototype code
+- avoid giant files and duplicated logic
+- keep future WHMCS/billing integration possible
+- keep future custom daemon support possible
+
+At the end
+
+When finished, show me:
+
+1. what was changed
+2. what stack the project now uses
+3. what is fully implemented
+4. what is still mocked/scaffolded
+5. exact deploy steps for my own Ubuntu server
+6. the final folder structure
+7. anything I should fix manually before pushing to GitHub

@@ -1,12 +1,13 @@
+import { createServer } from "http";
 import app from "./app";
 import { logger } from "./lib/logger";
+import { attachWebSocketServer } from "./ws/consoleServer";
+import { startScheduleRunner } from "./cron/scheduleRunner";
 
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
+  throw new Error("PORT environment variable is required but was not provided.");
 }
 
 const port = Number(rawPort);
@@ -15,11 +16,22 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+const httpServer = createServer(app);
 
-  logger.info({ port }, "Server listening");
+attachWebSocketServer(httpServer);
+
+httpServer.listen(port, () => {
+  logger.info({ port }, "EGH Panel API listening");
+  logger.info("WebSocket console attached at /ws");
+  startScheduleRunner();
+});
+
+httpServer.on("error", (err: NodeJS.ErrnoException) => {
+  logger.error({ err }, "HTTP server error");
+  process.exit(1);
+});
+
+process.on("SIGTERM", () => {
+  logger.info("SIGTERM received — shutting down gracefully");
+  httpServer.close(() => process.exit(0));
 });

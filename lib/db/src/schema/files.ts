@@ -27,6 +27,7 @@ export const scheduleActionEnum = pgEnum("schedule_action", [
   "restart",
   "kill",
   "backup",
+  "command",
 ]);
 
 export const schedulesTable = pgTable("schedules", {
@@ -39,6 +40,7 @@ export const schedulesTable = pgTable("schedules", {
   cronMonth: text("cron_month").notNull().default("*"),
   cronDayOfWeek: text("cron_day_of_week").notNull().default("*"),
   action: scheduleActionEnum("action").notNull().default("restart"),
+  payload: text("payload"),
   isEnabled: text("is_enabled").notNull().default("true"),
   lastRunAt: timestamp("last_run_at", { withTimezone: true }),
   nextRunAt: timestamp("next_run_at", { withTimezone: true }),
