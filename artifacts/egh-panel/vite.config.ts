@@ -2,74 +2,69 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-const rawPort = process.env.PORT;
+// PORT is only used by the dev/preview server.  It is not needed during
+// `vite build`, so we must never throw when it is absent (e.g. Docker
+// build stages).  Default to 3000 for plain local development.
+const port = Number(process.env.PORT ?? "3000");
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+// BASE_PATH sets the Vite `base` option (asset URL prefix) and the React
+// Router base.  "/" is correct for the standard Docker / self-hosted setup.
+const basePath = process.env.BASE_PATH ?? "/";
 
-const port = Number(rawPort);
+// Only load Replit-specific plugins when running inside the Replit IDE.
+const isReplit = process.env.REPL_ID !== undefined;
 
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
+export default defineConfig(async () => {
+  const replitPlugins = isReplit
+    ? [
+        (await import("@replit/vite-plugin-runtime-error-modal")).default(),
+        ...(process.env.NODE_ENV !== "production"
+          ? [
+              (
+                await import("@replit/vite-plugin-cartographer")
+              ).cartographer({
+                root: path.resolve(import.meta.dirname, ".."),
+              }),
+              (await import("@replit/vite-plugin-dev-banner")).devBanner(),
+            ]
+          : []),
+      ]
+    : [];
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
-
-export default defineConfig({
-  base: basePath,
-  plugins: [
-    react(),
-    tailwindcss(),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer({
-              root: path.resolve(import.meta.dirname, ".."),
-            }),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
-  ],
-  resolve: {
-    alias: {
-      "@": path.resolve(import.meta.dirname, "src"),
-      "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
+  return {
+    base: basePath,
+    plugins: [react(), tailwindcss(), ...replitPlugins],
+    resolve: {
+      alias: {
+        "@": path.resolve(import.meta.dirname, "src"),
+        "@assets": path.resolve(
+          import.meta.dirname,
+          "..",
+          "..",
+          "attached_assets",
+        ),
+      },
+      dedupe: ["react", "react-dom"],
     },
-    dedupe: ["react", "react-dom"],
-  },
-  root: path.resolve(import.meta.dirname),
-  build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
-    emptyOutDir: true,
-  },
-  server: {
-    port,
-    host: "0.0.0.0",
-    allowedHosts: true,
-    fs: {
-      strict: true,
-      deny: ["**/.*"],
+    root: path.resolve(import.meta.dirname),
+    build: {
+      outDir: path.resolve(import.meta.dirname, "dist/public"),
+      emptyOutDir: true,
     },
-  },
-  preview: {
-    port,
-    host: "0.0.0.0",
-    allowedHosts: true,
-  },
+    server: {
+      port,
+      host: "0.0.0.0",
+      allowedHosts: true,
+      fs: {
+        strict: true,
+        deny: ["**/.*"],
+      },
+    },
+    preview: {
+      port,
+      host: "0.0.0.0",
+      allowedHosts: true,
+    },
+  };
 });

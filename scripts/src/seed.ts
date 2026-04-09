@@ -9,6 +9,7 @@ import {
   serversTable,
   serverVariablesTable,
 } from "../../lib/db/src/schema";
+import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 async function seed() {
@@ -47,6 +48,10 @@ async function seed() {
     role: "admin",
     isActive: true,
   }).onConflictDoNothing().returning();
+
+  // Silence unused-variable warnings — users exist in DB even if not returned
+  void superAdmin;
+  void adminUser;
 
   console.log("Users seeded");
 
@@ -198,9 +203,15 @@ async function seed() {
 
   console.log("Allocations seeded");
 
-  // Demo servers (if we have a client user and node and allocation)
+  // Demo servers (requires a seeded client user, node, and allocation)
   if (clientUser && node1) {
-    const [firstAlloc] = await db.select().from(allocationsTable).limit(1);
+    // Pick the first allocation belonging to node1 for the demo server.
+    const [firstAlloc] = await db
+      .select()
+      .from(allocationsTable)
+      .where(eq(allocationsTable.nodeId, node1.id))
+      .limit(1);
+
     const [firstEgg] = await db.select().from(eggsTable).limit(1);
 
     if (firstAlloc && firstEgg) {
@@ -220,11 +231,11 @@ async function seed() {
       }).onConflictDoNothing().returning();
 
       if (server) {
-        await db.update(allocationsTable).set({ serverId: server.id }).where(
-          // just mark it used
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-          undefined as never
-        );
+        // Mark only the specific allocation as used by this server.
+        await db
+          .update(allocationsTable)
+          .set({ serverId: server.id })
+          .where(eq(allocationsTable.id, firstAlloc.id));
 
         await db.insert(serverVariablesTable).values({
           serverId: server.id,

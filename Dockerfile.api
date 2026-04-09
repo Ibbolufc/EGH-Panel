@@ -21,6 +21,11 @@ RUN pnpm --filter @workspace/api-server run build
 FROM node:22-alpine AS production
 WORKDIR /app
 
+# curl is required by the HEALTHCHECK below.  wget is available in Alpine
+# by default but curl is not; install it explicitly rather than relying on
+# the base image version.
+RUN apk add --no-cache curl
+
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
 COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./

@@ -94,17 +94,31 @@ FRONTEND_URL=http://your-server-ip
 Or manually:
 
 ```bash
+# Build all images
 docker compose build --parallel
-docker compose run --rm api pnpm --filter @workspace/db run push-force
-docker compose run --rm api pnpm --filter @workspace/scripts run seed   # first deploy only
+
+# Start postgres so we can migrate and seed
+docker compose up -d postgres
+
+# Push the database schema (runs drizzle-kit inside the api image)
+docker compose run --rm api node -e "require('child_process').execSync('pnpm --filter @workspace/db run push-force', {stdio:'inherit'})"
+
+# Seed demo data — runs locally, points to the Docker postgres
+#   (adjust host/port if you changed POSTGRES_* values in .env)
+DATABASE_URL="postgresql://eghpanel:${POSTGRES_PASSWORD}@localhost:5432/eghpanel" \
+  pnpm --filter @workspace/scripts run seed
+
+# Bring everything up
 docker compose up -d
 ```
+
+> **Tip:** The seed script is idempotent (`onConflictDoNothing`). Running it twice is safe.
 
 ### 3. Verify
 
 ```bash
 docker compose ps                              # all containers healthy
-curl http://localhost/api/healthz              # {"status":"ok"}
+curl http://localhost/api/healthz              # {"status":"ok","uptime":...}
 ```
 
 Open `http://your-server-ip` in your browser.
@@ -169,14 +183,39 @@ sudo usermod -aG docker $USER && newgrp docker
 
 ### TLS / HTTPS (recommended)
 
-Use Certbot outside Docker, or add a Caddy container as a TLS-terminating reverse proxy.
+EGH Panel's nginx container only listens on **HTTP port 80**. TLS is intentionally handled outside the stack so you can use whatever certificate provider you prefer. Two common approaches:
+
+**Option A — Caddy reverse proxy (easiest, auto-HTTPS)**
 
 ```bash
-sudo apt-get install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d panel.yourdomain.com
+sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt-get update && sudo apt-get install -y caddy
+
+# /etc/caddy/Caddyfile
+panel.yourdomain.com {
+    reverse_proxy localhost:80
+}
+
+sudo systemctl reload caddy
 ```
 
-Then update `FRONTEND_URL=https://panel.yourdomain.com` in `.env` and restart.
+**Option B — Certbot (standalone) + host nginx**
+
+```bash
+sudo apt-get install -y certbot
+sudo certbot certonly --standalone -d panel.yourdomain.com
+# Then configure a host-level nginx or Apache to proxy to localhost:80
+```
+
+After enabling HTTPS, update `.env`:
+
+```env
+FRONTEND_URL=https://panel.yourdomain.com
+```
+
+Then run `docker compose up -d` to rebuild the frontend with the correct CORS origin.
 
 ---
 
@@ -209,8 +248,8 @@ This is a v1 release. The following features work end-to-end in the UI but use a
 | `JWT_EXPIRES_IN`    | No       | 7d                 | JWT token expiry                     |
 | `FRONTEND_URL`      | No       | http://localhost   | Frontend URL (for CORS)              |
 | `NODE_ENV`          | No       | development        | Set to `production` in Docker        |
-| `PORT`              | Yes      | —                  | API server port (set by runtime)     |
-| `CORS_ORIGIN`       | No       | true (all)         | Restrict CORS to your domain         |
+| `PORT`              | No       | 8080 (api/Docker)  | API server listen port               |
+| `CORS_ORIGIN`       | No       | FRONTEND_URL       | Restrict CORS to your domain         |
 
 ---
 
