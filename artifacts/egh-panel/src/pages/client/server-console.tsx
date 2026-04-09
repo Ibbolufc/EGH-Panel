@@ -1,14 +1,69 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ClientLayout } from "@/components/layout/client-layout";
 import { useGetServer } from "@workspace/api-client-react";
-import { Terminal, Send, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { Terminal, Send, Wifi, WifiOff, Loader2, Cpu, MemoryStick, HardDrive, Activity } from "lucide-react";
 import { useParams } from "wouter";
 
 type WsStatus = "connecting" | "connected" | "disconnected" | "error";
 
+interface ServerStats {
+  cpuAbsolute: number;
+  memoryBytes: number;
+  memoryLimitBytes: number;
+  diskBytes: number;
+  networkRxBytes: number;
+  networkTxBytes: number;
+  uptime: number;
+  state: string;
+}
+
 function buildWsUrl(serverId: number, token: string): string {
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
   return `${proto}://${window.location.host}/ws?token=${encodeURIComponent(token)}&serverId=${serverId}`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function formatUptime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function StatBar({ label, icon: Icon, value, max, formatted }: {
+  label: string;
+  icon: React.ElementType;
+  value: number;
+  max?: number;
+  formatted: string;
+}) {
+  const pct = max ? Math.min(100, (value / max) * 100) : 0;
+  const color = pct > 85 ? "bg-red-500" : pct > 60 ? "bg-yellow-500" : "bg-green-500";
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <Icon className="h-3 w-3" />
+          {label}
+        </span>
+        <span className="font-mono text-foreground">{formatted}</span>
+      </div>
+      {max !== undefined && (
+        <div className="h-1.5 w-full rounded-full bg-white/10">
+          <div className={`h-1.5 rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function ServerConsole() {
@@ -21,6 +76,7 @@ export default function ServerConsole() {
   const [command, setCommand] = useState("");
   const [wsStatus, setWsStatus] = useState<WsStatus>("connecting");
   const [liveStatus, setLiveStatus] = useState<string | null>(null);
+  const [stats, setStats] = useState<ServerStats | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,6 +113,9 @@ export default function ServerConsole() {
             break;
           case "status":
             setLiveStatus((msg.data as { status: string }).status);
+            break;
+          case "stats":
+            setStats(msg.data as ServerStats);
             break;
           case "auth_error":
           case "not_found":
@@ -107,14 +166,14 @@ export default function ServerConsole() {
   const displayStatus = liveStatus ?? server?.status;
   const isRunning = displayStatus === "running";
 
-  const statusLabel: Record<WsStatus, string> = {
+  const wsStatusLabel: Record<WsStatus, string> = {
     connecting: "Connecting...",
     connected: "Live",
     disconnected: "Reconnecting...",
     error: "Connection error",
   };
 
-  const statusColor: Record<WsStatus, string> = {
+  const wsStatusColor: Record<WsStatus, string> = {
     connecting: "text-yellow-400",
     connected: "text-green-400",
     disconnected: "text-yellow-400",
@@ -124,6 +183,7 @@ export default function ServerConsole() {
   return (
     <ClientLayout title={`${server?.name ?? "Server"} — Console`}>
       <div className="space-y-4">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Terminal className="h-5 w-5 text-primary" />
@@ -134,7 +194,7 @@ export default function ServerConsole() {
               </span>
             )}
           </div>
-          <div className={`flex items-center gap-1.5 text-xs ${statusColor[wsStatus]}`}>
+          <div className={`flex items-center gap-1.5 text-xs ${wsStatusColor[wsStatus]}`}>
             {wsStatus === "connecting" || wsStatus === "disconnected" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : wsStatus === "connected" ? (
@@ -142,10 +202,43 @@ export default function ServerConsole() {
             ) : (
               <WifiOff className="h-3.5 w-3.5" />
             )}
-            {statusLabel[wsStatus]}
+            {wsStatusLabel[wsStatus]}
           </div>
         </div>
 
+        {/* Live stats bar — shown once stats start arriving */}
+        {stats && (
+          <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-card p-4 sm:grid-cols-4" data-testid="console-stats">
+            <StatBar
+              label="CPU"
+              icon={Cpu}
+              value={stats.cpuAbsolute}
+              max={100}
+              formatted={`${stats.cpuAbsolute.toFixed(1)}%`}
+            />
+            <StatBar
+              label="Memory"
+              icon={MemoryStick}
+              value={stats.memoryBytes}
+              max={stats.memoryLimitBytes}
+              formatted={`${formatBytes(stats.memoryBytes)} / ${formatBytes(stats.memoryLimitBytes)}`}
+            />
+            <StatBar
+              label="Disk"
+              icon={HardDrive}
+              value={stats.diskBytes}
+              formatted={formatBytes(stats.diskBytes)}
+            />
+            <StatBar
+              label="Uptime"
+              icon={Activity}
+              value={stats.uptime}
+              formatted={formatUptime(stats.uptime)}
+            />
+          </div>
+        )}
+
+        {/* Console output */}
         <div
           className="rounded-lg border border-border bg-black/50 h-96 overflow-y-auto p-4 font-mono text-xs"
           data-testid="console-output"
@@ -175,6 +268,7 @@ export default function ServerConsole() {
           <div ref={logEndRef} />
         </div>
 
+        {/* Command input */}
         <form onSubmit={sendCommand} className="flex gap-2">
           <div className="relative flex-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-400 font-mono text-sm">$</span>
@@ -202,7 +296,7 @@ export default function ServerConsole() {
 
         {wsStatus === "error" && (
           <p className="text-xs text-red-400">
-            Console connection failed. Check that the server is reachable.
+            Console connection failed. Check that the server is reachable and your session is valid.
           </p>
         )}
       </div>
