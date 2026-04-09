@@ -1,6 +1,6 @@
 # EGH Panel
 
-A self-hosted, premium dark-themed game server hosting control panel with Pterodactyl egg compatibility. Manage game servers, users, nodes, and schedules from a polished admin and client interface.
+A self-hosted, dark-themed game server hosting control panel with Pterodactyl egg compatibility. Manage game servers, users, nodes, and schedules from a polished admin and client interface — fully containerised for deployment on any Linux server.
 
 ---
 
@@ -18,34 +18,38 @@ A self-hosted, premium dark-themed game server hosting control panel with Pterod
 
 ## Stack
 
-| Layer         | Technology                         |
-|---------------|------------------------------------|
-| Frontend      | React 19 + Vite 7 + TypeScript     |
-| Backend       | Express 5 + TypeScript (ESM)       |
-| Database      | PostgreSQL 16 + Drizzle ORM        |
-| Realtime      | WebSocket (ws library)             |
-| Scheduling    | node-cron                          |
-| Auth          | JWT (jsonwebtoken + bcryptjs)      |
-| API Spec      | OpenAPI 3 + Orval codegen          |
-| Deployment    | Docker Compose + nginx             |
+| Layer         | Technology                                    |
+|---------------|-----------------------------------------------|
+| Frontend      | React 19 + Vite 7 + TypeScript                |
+| Backend       | Express 5 + TypeScript (ESM)                  |
+| Database      | PostgreSQL 16 + Drizzle ORM                   |
+| Realtime      | WebSocket (`ws` library)                      |
+| Scheduling    | node-cron                                     |
+| Auth          | JWT (jsonwebtoken + bcryptjs)                 |
+| API Spec      | OpenAPI 3 + Orval codegen                     |
+| Deployment    | Docker Compose + nginx (HTTP) + node:22-alpine|
 
 ---
 
 ## Architecture
 
 ```
-nginx (port 80)
+nginx (:80)
   ├── /api/*  →  api-server (Express 5, port 8080)
   ├── /ws     →  api-server (WebSocket console)
-  └── /*      →  egh-panel (React SPA served by nginx)
+  └── /*      →  egh-panel  (React SPA via nginx static)
 
 PostgreSQL 16  — primary database
-Redis 7        — wired, reserved for future queue/cache use
+Redis 7        — reserved for future queue/cache use
 ```
+
+### HTTPS
+
+EGH Panel serves HTTP only from the nginx container. TLS is handled by an external reverse proxy placed in front of the stack (see [HTTPS Setup](#https-setup) below).
 
 ### Provider abstraction
 
-All game server operations go through the `INodeProvider` interface. The current implementation uses `MockProvider` (realistic in-memory simulation). To connect a real Pterodactyl Wings daemon:
+All game server operations go through the `INodeProvider` interface. The current implementation is `MockProvider` (in-memory simulation). To connect a real Pterodactyl Wings daemon:
 
 1. Implement `INodeProvider` in `artifacts/api-server/src/providers/wings.ts`
 2. Register it in `artifacts/api-server/src/providers/registry.ts`
@@ -54,19 +58,25 @@ No route changes needed.
 
 ### WebSocket Console
 
-Clients connect to `ws://HOST/ws?token=JWT&serverId=N`.
+Connect to `ws://HOST/ws?token=JWT&serverId=N`.
 
-Outgoing: `console`, `status`, `stats`, `auth_error`, `not_found`
-Incoming: `send_command`, `set_state`
+Server → Client: `console`, `status`, `stats`, `auth_error`, `not_found`
+Client → Server: `send_command`, `set_state`
 
 ---
 
-## Quickstart (Docker Compose)
+## Quickstart (Docker Compose — Ubuntu 22.04+)
 
 ### Prerequisites
 
 - Docker 24+ and Docker Compose v2
-- Linux server (Ubuntu 22.04+ recommended)
+- A non-root user with Docker access
+
+```bash
+# Install Docker (skip if already installed)
+curl -fsSL https://get.docker.com | bash
+sudo usermod -aG docker $USER && newgrp docker
+```
 
 ### 1. Clone and configure
 
@@ -76,122 +86,98 @@ cd EGH-Panel
 cp .env.example .env
 ```
 
-Edit `.env` — required values:
+Edit `.env`:
 
-```env
-POSTGRES_PASSWORD=your_strong_password
-JWT_SECRET=           # generate: openssl rand -hex 64
-REDIS_PASSWORD=your_redis_password
-FRONTEND_URL=http://your-server-ip
-```
+| Variable            | Required | Notes                                |
+|---------------------|----------|--------------------------------------|
+| `POSTGRES_PASSWORD` | **Yes**  | Choose a strong password             |
+| `JWT_SECRET`        | **Yes**  | `openssl rand -hex 64`               |
+| `REDIS_PASSWORD`    | No       | Defaults to `changeme`               |
+| `FRONTEND_URL`      | No       | Defaults to `http://localhost`       |
+| `HTTP_PORT`         | No       | Host port for nginx (default `80`)   |
 
-### 2. Deploy
-
-```bash
-./scripts/deploy.sh
-```
-
-Or manually:
+### 2. First-time install
 
 ```bash
-# Build all images
-docker compose build --parallel
-
-# Start postgres so we can migrate and seed
-docker compose up -d postgres
-
-# Push the database schema (runs drizzle-kit inside the api image)
-docker compose run --rm api node -e "require('child_process').execSync('pnpm --filter @workspace/db run push-force', {stdio:'inherit'})"
-
-# Seed demo data — runs locally, points to the Docker postgres
-#   (adjust host/port if you changed POSTGRES_* values in .env)
-DATABASE_URL="postgresql://eghpanel:${POSTGRES_PASSWORD}@localhost:5432/eghpanel" \
-  pnpm --filter @workspace/scripts run seed
-
-# Bring everything up
-docker compose up -d
+chmod +x scripts/install.sh scripts/update.sh scripts/seed.sh scripts/deploy.sh
+./scripts/install.sh
 ```
 
-> **Tip:** The seed script is idempotent (`onConflictDoNothing`). Running it twice is safe.
+The script will:
+1. Validate your `.env`
+2. Build all Docker images
+3. Start PostgreSQL and run migrations
+4. Ask whether to load demo data
+5. Start all services
+
+To skip the interactive prompt:
+
+```bash
+./scripts/install.sh --seed     # install + seed demo data
+./scripts/install.sh --no-seed  # install without seeding
+```
 
 ### 3. Verify
 
 ```bash
-docker compose ps                              # all containers healthy
-curl http://localhost/api/healthz              # {"status":"ok","uptime":...}
+docker compose ps                  # all services should show "healthy" or "running"
+curl http://localhost/api/healthz  # → {"status":"ok","uptime":...}
 ```
 
-Open `http://your-server-ip` in your browser.
+Open `http://your-server-ip` in a browser.
 
 ---
 
 ## Demo Accounts
 
-| Email | Password | Role |
-|-------|----------|------|
-| admin@eghpanel.com | admin123 | super_admin |
-| admin2@eghpanel.com | admin123 | admin |
-| client@example.com | client123 | client |
+Created by `scripts/seed.sh`. Remove or change them before exposing the panel to the internet.
 
-> Remove or change these before exposing the panel to the internet.
-
----
-
-## Local Development
-
-### Prerequisites
-
-- Node.js 22+
-- pnpm 10+
-- PostgreSQL 16 (local or Docker)
-
-### Setup
-
-```bash
-pnpm install
-cp .env.example .env
-# Set DATABASE_URL, JWT_SECRET, PORT in .env
-
-pnpm --filter @workspace/db run push
-pnpm --filter @workspace/scripts run seed
-
-# Terminal 1 — API server
-pnpm --filter @workspace/api-server run dev
-
-# Terminal 2 — Frontend
-pnpm --filter @workspace/egh-panel run dev
-```
-
-### Useful commands
-
-```bash
-pnpm --filter @workspace/db run push-force        # Force-push schema (needed for enum changes)
-pnpm --filter @workspace/api-spec run codegen      # Regenerate API client + Zod schemas from OpenAPI spec
-pnpm run typecheck                                 # Typecheck all packages
-```
+| Email                  | Password  | Role        |
+|------------------------|-----------|-------------|
+| admin@eghpanel.com     | admin123  | super_admin |
+| admin2@eghpanel.com    | admin123  | admin       |
+| client@example.com     | client123 | client      |
 
 ---
 
-## Production Deployment (Ubuntu)
+## Update / Redeploy
 
-### Install Docker
+After `git pull`:
 
 ```bash
-curl -fsSL https://get.docker.com | sudo bash
-sudo usermod -aG docker $USER && newgrp docker
+./scripts/update.sh
 ```
 
-### TLS / HTTPS (recommended)
+This rebuilds changed images, runs any new migrations, and restarts services. It does **not** reseed data.
 
-EGH Panel's nginx container only listens on **HTTP port 80**. TLS is intentionally handled outside the stack so you can use whatever certificate provider you prefer. Two common approaches:
+---
 
-**Option A — Caddy reverse proxy (easiest, auto-HTTPS)**
+## Seed Demo Data
+
+The seed is idempotent (uses `onConflictDoNothing`). Safe to run on an existing database.
 
 ```bash
+./scripts/seed.sh
+```
+
+To skip in production — just don't run the seed script. There is no seed that runs automatically.
+
+---
+
+## HTTPS Setup
+
+EGH Panel does not handle TLS internally. Place a reverse proxy in front of the nginx container.
+
+**Option A — Caddy (recommended, auto-HTTPS)**
+
+```bash
+# Install Caddy on the host
 sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt-get update && sudo apt-get install -y caddy
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key \
+  | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \
+  | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt-get update && sudo apt-get install caddy
 
 # /etc/caddy/Caddyfile
 panel.yourdomain.com {
@@ -201,12 +187,12 @@ panel.yourdomain.com {
 sudo systemctl reload caddy
 ```
 
-**Option B — Certbot (standalone) + host nginx**
+**Option B — Certbot standalone**
 
 ```bash
 sudo apt-get install -y certbot
 sudo certbot certonly --standalone -d panel.yourdomain.com
-# Then configure a host-level nginx or Apache to proxy to localhost:80
+# Then configure host-level nginx or Apache to proxy to localhost:80
 ```
 
 After enabling HTTPS, update `.env`:
@@ -215,41 +201,129 @@ After enabling HTTPS, update `.env`:
 FRONTEND_URL=https://panel.yourdomain.com
 ```
 
-Then run `docker compose up -d` to rebuild the frontend with the correct CORS origin.
+Then rebuild the frontend image (it bakes `FRONTEND_URL` into CORS config):
+
+```bash
+docker compose build frontend
+docker compose up -d frontend api
+```
+
+---
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 22+
+- pnpm 10+ (`corepack enable && corepack prepare pnpm@10.6.5 --activate`)
+- PostgreSQL 16 (local or `docker compose up -d postgres`)
+
+### Setup
+
+```bash
+pnpm install
+
+# Set DATABASE_URL, JWT_SECRET in .env (or export them directly)
+export DATABASE_URL="postgresql://eghpanel:yourpassword@localhost:5432/eghpanel"
+export JWT_SECRET="$(openssl rand -hex 64)"
+
+# Push schema
+pnpm --filter @workspace/db run push
+
+# Seed demo data (optional)
+pnpm --filter @workspace/scripts run seed
+
+# Terminal 1 — API server (port 8080)
+pnpm --filter @workspace/api-server run dev
+
+# Terminal 2 — Frontend (port provided by runtime)
+pnpm --filter @workspace/egh-panel run dev
+```
+
+### Useful commands
+
+```bash
+# Force-push schema (needed after enum changes)
+pnpm --filter @workspace/db run push-force
+
+# Regenerate API client + Zod schemas from OpenAPI spec
+pnpm --filter @workspace/api-spec run codegen
+
+# Type-check all packages
+pnpm run typecheck
+```
+
+---
+
+## Manual Docker Commands
+
+If you prefer not to use the helper scripts:
+
+```bash
+# Build all images (including the tools image for migrate/seed)
+docker compose build --parallel
+
+# Start postgres only
+docker compose up -d postgres
+
+# Run migrations (via the tools container)
+docker compose --profile tools run --rm tools \
+  pnpm --filter @workspace/db run push-force
+
+# Seed demo data (via the tools container)
+docker compose --profile tools run --rm tools \
+  pnpm --filter @workspace/scripts run seed
+
+# Start all services
+docker compose up -d
+
+# View logs
+docker compose logs -f api
+docker compose logs -f frontend
+
+# Stop everything
+docker compose down
+```
 
 ---
 
 ## What Is Mocked
 
-This is a v1 release. The following features work end-to-end in the UI but use a simulated backend:
+This is a v1 release. The following features have complete UI but use a simulated backend:
 
-| Feature               | Status | Notes                                               |
-|-----------------------|--------|-----------------------------------------------------|
-| File storage          | Mock   | In-memory per server, resets on API restart         |
-| Backup files          | Mock   | DB records only, no actual file data                |
-| Power actions         | Mock   | DB status update + MockProvider (no real daemon)    |
-| Console output        | Mock   | Simulated strings (real WebSocket transport active) |
-| Server stats          | Mock   | Random values within realistic limits               |
-| Node heartbeat        | Mock   | Always returns online                               |
-| Redis                 | Wired  | In docker-compose, not yet used for queue/cache     |
-| Wings daemon          | Stub   | INodeProvider interface ready, not implemented      |
+| Feature            | Status  | Notes                                                    |
+|--------------------|---------|----------------------------------------------------------|
+| Console output     | **Mock**| Simulated strings over a real WebSocket transport        |
+| Server stats       | **Mock**| Random CPU/memory/disk values within realistic limits    |
+| Power actions      | **Mock**| DB status update only, no real daemon call               |
+| File storage       | **Mock**| In-memory per server, resets on API restart              |
+| Backup files       | **Mock**| DB records only, no actual file data stored              |
+| Node heartbeat     | **Mock**| Always returns online                                    |
+| Wings daemon       | **Stub**| `INodeProvider` interface ready, not implemented         |
+| Redis              | **Wired**| In docker-compose, not yet consumed by app code         |
+| JWT auth           | **Real**| Full login, token validation, role gating                |
+| REST API           | **Real**| All routes, validation, rate limiting, error handling    |
+| Database           | **Real**| PostgreSQL with Drizzle ORM, full schema                 |
+| WebSocket          | **Real**| Connection, auth, live stats frame, reconnect logic      |
+| Schedules          | **Real**| node-cron runs on the API server, dispatches actions     |
 
 ---
 
 ## Environment Variables
 
-| Variable            | Required | Default            | Description                          |
-|---------------------|----------|--------------------|--------------------------------------|
-| `POSTGRES_PASSWORD` | Yes      | —                  | PostgreSQL password                  |
-| `POSTGRES_USER`     | No       | eghpanel           | PostgreSQL username                  |
-| `POSTGRES_DB`       | No       | eghpanel           | PostgreSQL database name             |
-| `REDIS_PASSWORD`    | No       | changeme           | Redis password                       |
-| `JWT_SECRET`        | Yes      | —                  | 64+ char random hex string           |
-| `JWT_EXPIRES_IN`    | No       | 7d                 | JWT token expiry                     |
-| `FRONTEND_URL`      | No       | http://localhost   | Frontend URL (for CORS)              |
-| `NODE_ENV`          | No       | development        | Set to `production` in Docker        |
-| `PORT`              | No       | 8080 (api/Docker)  | API server listen port               |
-| `CORS_ORIGIN`       | No       | FRONTEND_URL       | Restrict CORS to your domain         |
+All variables are set in `.env` (copy from `.env.example`).
+
+| Variable            | Required | Default           | Description                           |
+|---------------------|----------|-------------------|---------------------------------------|
+| `POSTGRES_PASSWORD` | **Yes**  | —                 | PostgreSQL password                   |
+| `POSTGRES_USER`     | No       | `eghpanel`        | PostgreSQL username                   |
+| `POSTGRES_DB`       | No       | `eghpanel`        | PostgreSQL database name              |
+| `REDIS_PASSWORD`    | No       | `changeme`        | Redis password                        |
+| `JWT_SECRET`        | **Yes**  | —                 | ≥64-char random hex (server will not start without it) |
+| `JWT_EXPIRES_IN`    | No       | `7d`              | JWT token expiry                      |
+| `FRONTEND_URL`      | No       | `http://localhost`| Public URL used for CORS              |
+| `HTTP_PORT`         | No       | `80`              | Host port nginx binds to              |
+| `NODE_ENV`          | No       | `development`     | Set to `production` in Docker         |
 
 ---
 
@@ -259,25 +333,31 @@ This is a v1 release. The following features work end-to-end in the UI but use a
 egh-panel/
 ├── artifacts/
 │   ├── api-server/src/
-│   │   ├── providers/          — INodeProvider abstraction (mock + registry)
-│   │   ├── services/           — Business logic (serverService.ts)
-│   │   ├── middleware/         — errorHandler, validate, rateLimiter
-│   │   ├── ws/                 — WebSocket console server
-│   │   ├── cron/               — Schedule execution engine
-│   │   └── routes/             — REST API route handlers
+│   │   ├── providers/      — INodeProvider abstraction (mock + registry)
+│   │   ├── services/       — Business logic (serverService.ts)
+│   │   ├── middleware/      — errorHandler, validate, rateLimiter
+│   │   ├── ws/             — WebSocket console server
+│   │   ├── cron/           — Schedule execution engine
+│   │   └── routes/         — REST API route handlers
 │   └── egh-panel/src/
-│       ├── pages/admin/        — Admin panel pages
-│       └── pages/client/       — Client panel pages
+│       ├── pages/admin/    — Admin panel pages
+│       └── pages/client/   — Client panel pages
 ├── lib/
-│   ├── db/                     — Drizzle ORM schema
-│   ├── api-spec/               — OpenAPI 3 spec
-│   ├── api-zod/                — Generated Zod schemas
-│   └── api-client-react/       — Generated React Query hooks
-├── scripts/                    — Seed + deploy scripts
+│   ├── db/                 — Drizzle ORM schema + migrations
+│   ├── api-spec/           — OpenAPI 3 specification
+│   ├── api-zod/            — Generated Zod schemas
+│   └── api-client-react/   — Generated React Query hooks
+├── scripts/
+│   ├── install.sh          — First-time install
+│   ├── update.sh           — Update after git pull
+│   ├── seed.sh             — Load demo data
+│   ├── deploy.sh           — Wrapper (--install or update)
+│   └── src/seed.ts         — Seed implementation
+├── Dockerfile.api          — API production image
+├── Dockerfile.frontend     — Frontend build + nginx image
+├── Dockerfile.tools        — Migration + seed one-off image
 ├── docker-compose.yml
-├── Dockerfile.api
-├── Dockerfile.frontend
-├── nginx.conf
+├── nginx.conf              — Reverse proxy (HTTP only)
 └── .env.example
 ```
 
@@ -286,24 +366,24 @@ egh-panel/
 ## Security Notes
 
 - `JWT_SECRET` **must** be set — the server refuses to start without it.
-- Passwords require ≥8 chars with at least one letter and one number.
-- Rate limiting is active on all endpoints (200 req/min general, 10 req/min on auth).
+- Passwords require ≥8 characters with at least one letter and one digit.
+- Rate limiting: 200 req/min general, 10 req/min on `/auth/login`.
 - `helmet` is enabled with standard HTTP security headers.
-- Docker containers run on isolated internal networks.
-- JWT tokens are stateless — to add token invalidation, implement a Redis blocklist.
+- Docker containers run on isolated internal networks; only nginx is public-facing.
+- JWT tokens are stateless — for revocation, implement a Redis blocklist.
+- Remove demo accounts (`./scripts/seed.sh` data) before production use.
 
 ---
 
 ## Roadmap
 
-1. **WingsProvider** — Implement the `INodeProvider` interface to connect a real Pterodactyl Wings daemon
-2. **Real file operations** — Wire file endpoints to the actual daemon filesystem
-3. **Real console streaming** — Stream daemon WebSocket output through the EGH WS server
+1. **WingsProvider** — Implement `INodeProvider` to connect a real Pterodactyl Wings daemon
+2. **Real console streaming** — Proxy daemon WebSocket output through the EGH WS server
+3. **Real file operations** — Wire file endpoints to the daemon filesystem
 4. **BullMQ job queue** — Use Redis for backup/install job queuing (REDIS_URL already wired)
-5. **File upload/download** — Add signed download URLs and multipart upload endpoint
-6. **SFTP access** — Expose SFTP via the file manager UI
-7. **Two-factor authentication** — TOTP on login
-8. **Audit log export** — CSV/JSON export for super_admins
+5. **Two-factor auth** — TOTP support on login
+6. **Audit log export** — CSV/JSON export for super_admins
+7. **SFTP access** — Expose SFTP via the file manager UI
 
 ---
 
@@ -314,7 +394,7 @@ egh-panel/
 3. Commit your changes
 4. Open a pull request
 
-The most impactful contribution is implementing `WingsProvider`.
+The most impactful contribution right now is implementing `WingsProvider`.
 
 ---
 
