@@ -81,12 +81,14 @@ export default function ServerConsole() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
+  const terminalErrorRef = useRef(false);
 
   const connect = useCallback(() => {
-    if (unmountedRef.current) return;
+    if (unmountedRef.current || terminalErrorRef.current) return;
 
     const token = localStorage.getItem("egh_token");
     if (!token || !id || Number.isNaN(id)) {
+      terminalErrorRef.current = true;
       setWsStatus("error");
       return;
     }
@@ -119,6 +121,7 @@ export default function ServerConsole() {
             break;
           case "auth_error":
           case "not_found":
+            terminalErrorRef.current = true;
             setWsStatus("error");
             ws.close();
             break;
