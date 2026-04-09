@@ -97,9 +97,10 @@ fi
 log "Starting all services..."
 docker compose up -d --remove-orphans
 
-log "Waiting for health checks (up to 60s)..."
-for i in $(seq 1 12); do
-  if docker compose ps | grep -q "healthy"; then
+log "Waiting for api to become healthy (up to 90s)..."
+for i in $(seq 1 18); do
+  status=$(docker compose ps --format json api 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d'"' -f4 || true)
+  if [[ "$status" == "healthy" ]]; then
     break
   fi
   sleep 5
@@ -108,6 +109,13 @@ done
 echo ""
 docker compose ps
 echo ""
-log "Install complete!"
-info "Panel: http://localhost (or your server IP)"
-info "Health: curl http://localhost/api/healthz"
+
+# Final check
+if ! curl -sf http://localhost:"${HTTP_PORT:-80}"/api/healthz >/dev/null 2>&1; then
+  warn "Health check at http://localhost:${HTTP_PORT:-80}/api/healthz did not respond."
+  warn "Services may still be starting. Check logs with: docker compose logs api"
+else
+  log "Install complete! Panel is ready."
+fi
+info "Panel: http://localhost (or your server IP / domain)"
+info "Health: curl http://localhost:${HTTP_PORT:-80}/api/healthz"

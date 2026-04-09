@@ -65,72 +65,125 @@ Client → Server: `send_command`, `set_state`
 
 ---
 
-## Quickstart (Docker Compose — Ubuntu 22.04+)
+## Deployment (Docker Compose — Ubuntu 22.04+)
+
+There is no single magic command that installs EGH Panel. Deployment has four distinct manual steps, described exactly below. A helper script (`scripts/install.sh`) automates steps 3–4 once you have completed steps 1–2.
+
+---
 
 ### Prerequisites
 
 - Docker 24+ and Docker Compose v2
-- A non-root user with Docker access
+- A non-root user with access to the Docker socket
 
 ```bash
-# Install Docker (skip if already installed)
+# Install Docker if not already installed
 curl -fsSL https://get.docker.com | bash
-sudo usermod -aG docker $USER && newgrp docker
+sudo usermod -aG docker $USER
+newgrp docker   # or log out and back in
+docker compose version  # must print v2.x
 ```
 
-### 1. Clone and configure
+---
+
+### Step 1 — Clone the repository
 
 ```bash
 git clone https://github.com/Ibbolufc/EGH-Panel.git
 cd EGH-Panel
+```
+
+---
+
+### Step 2 — Create and edit .env  *(manual, required)*
+
+```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Open `.env` and set **at minimum** these two values:
 
-| Variable            | Required | Notes                                |
-|---------------------|----------|--------------------------------------|
-| `POSTGRES_PASSWORD` | **Yes**  | Choose a strong password             |
-| `JWT_SECRET`        | **Yes**  | `openssl rand -hex 64`               |
-| `REDIS_PASSWORD`    | No       | Defaults to `changeme`               |
-| `FRONTEND_URL`      | No       | Defaults to `http://localhost`       |
-| `HTTP_PORT`         | No       | Host port for nginx (default `80`)   |
-
-### 2. First-time install
-
-```bash
-chmod +x scripts/install.sh scripts/update.sh scripts/seed.sh scripts/deploy.sh
-./scripts/install.sh
+```env
+POSTGRES_PASSWORD=choose_a_strong_password
+JWT_SECRET=         # generate: openssl rand -hex 64
 ```
 
-The script will:
-1. Validate your `.env`
-2. Build all Docker images
-3. Start PostgreSQL and run migrations
-4. Ask whether to load demo data
-5. Start all services
+Full variable reference:
 
-To skip the interactive prompt:
+| Variable            | Required | Default            | Description                                   |
+|---------------------|----------|--------------------|-----------------------------------------------|
+| `POSTGRES_PASSWORD` | **Yes**  | —                  | PostgreSQL password. Must be changed.         |
+| `JWT_SECRET`        | **Yes**  | —                  | ≥64-char random hex. Server will not start without it. |
+| `POSTGRES_USER`     | No       | `eghpanel`         | PostgreSQL username                           |
+| `POSTGRES_DB`       | No       | `eghpanel`         | PostgreSQL database name                      |
+| `REDIS_PASSWORD`    | No       | `changeme`         | Redis password                                |
+| `FRONTEND_URL`      | No       | `http://localhost` | Your public URL. Used for CORS headers.       |
+| `HTTP_PORT`         | No       | `80`               | Host port nginx listens on                    |
+
+Do not proceed until `.env` contains real values. The install script validates them and will exit if it finds the defaults.
+
+---
+
+### Step 3 — Build Docker images  *(slow on first run)*
 
 ```bash
-./scripts/install.sh --seed     # install + seed demo data
-./scripts/install.sh --no-seed  # install without seeding
+docker compose build --parallel
 ```
 
-### 3. Verify
+The first build downloads Node.js base images and compiles the TypeScript source. **Expect 5–15 minutes** on a typical VPS with a fresh Docker cache. Subsequent builds are fast.
+
+Four images are built:
+- `api` — Express 5 backend
+- `frontend` — React SPA compiled by Vite, served by nginx
+- `tools` — drizzle-kit migrations + seed script (one-off jobs only)
+
+---
+
+### Step 4 — Start postgres, migrate, seed, start services
+
+Make the scripts executable once:
 
 ```bash
-docker compose ps                  # all services should show "healthy" or "running"
-curl http://localhost/api/healthz  # → {"status":"ok","uptime":...}
+chmod +x scripts/install.sh scripts/update.sh scripts/seed.sh
 ```
 
-Open `http://your-server-ip` in a browser.
+Run the install script:
+
+```bash
+./scripts/install.sh [--seed | --no-seed]
+```
+
+What it does, in order:
+
+1. Validates `.env` (checks required vars are set and not still at default values)
+2. Starts the PostgreSQL container and waits for it to accept connections
+3. Runs `drizzle-kit push --force` via the tools container to create all tables
+4. Asks whether you want to load demo accounts and sample data  
+   — pass `--seed` to confirm automatically, `--no-seed` to skip without prompting
+5. Starts all services (`api`, `frontend`, `nginx`, `redis`) with `docker compose up -d`
+6. Waits up to 90 s for the API health check to pass, then prints `docker compose ps`
+
+If it succeeds, the final output will include a passing `curl http://localhost/api/healthz` check.
+
+---
+
+### Step 5 — Verify
+
+```bash
+docker compose ps
+# api and postgres should show (healthy); frontend, nginx, redis show Up
+
+curl http://localhost/api/healthz
+# → {"status":"ok","uptime":...}
+```
+
+Open `http://your-server-ip` in a browser and log in.
 
 ---
 
 ## Demo Accounts
 
-Created by `scripts/seed.sh`. Remove or change them before exposing the panel to the internet.
+Created by the seed script. **Remove or change these before exposing the panel to the internet.**
 
 | Email                  | Password  | Role        |
 |------------------------|-----------|-------------|
@@ -138,29 +191,45 @@ Created by `scripts/seed.sh`. Remove or change them before exposing the panel to
 | admin2@eghpanel.com    | admin123  | admin       |
 | client@example.com     | client123 | client      |
 
----
-
-## Update / Redeploy
-
-After `git pull`:
+To skip demo data on a production install:
 
 ```bash
+./scripts/install.sh --no-seed
+```
+
+Demo data is never loaded automatically. It is only loaded when you explicitly run the seed.
+
+---
+
+## Updating (after git pull)
+
+```bash
+git pull
 ./scripts/update.sh
 ```
 
-This rebuilds changed images, runs any new migrations, and restarts services. It does **not** reseed data.
+What it does:
+1. Rebuilds only the images that changed (`docker compose build --parallel`)
+2. Runs migrations via the tools container (idempotent — safe to run repeatedly)
+3. Restarts services with `docker compose up -d --remove-orphans`
+
+It does **not** seed data. Running `update.sh` on a live panel is safe.
 
 ---
 
-## Seed Demo Data
+## Seeding / Reseeding Demo Data
 
-The seed is idempotent (uses `onConflictDoNothing`). Safe to run on an existing database.
+The seed is idempotent (`onConflictDoNothing` on every insert). It is safe to run on an existing database — it will not duplicate rows.
 
 ```bash
 ./scripts/seed.sh
 ```
 
-To skip in production — just don't run the seed script. There is no seed that runs automatically.
+The script prompts for confirmation before running. To run unattended (e.g. in a pipeline) respond with `y` or pipe it:
+
+```bash
+echo y | ./scripts/seed.sh
+```
 
 ---
 
@@ -255,35 +324,77 @@ pnpm run typecheck
 
 ---
 
-## Manual Docker Commands
+## What Each Script Does
 
-If you prefer not to use the helper scripts:
+The helper scripts are thin wrappers. This is exactly what they run — no hidden behaviour:
+
+### install.sh (first-time only)
 
 ```bash
-# Build all images (including the tools image for migrate/seed)
+# 1. Validate .env (exits if POSTGRES_PASSWORD or JWT_SECRET are missing/default)
+
+# 2. Build all Docker images
 docker compose build --parallel
 
-# Start postgres only
+# 3. Start postgres and wait for it to be ready
 docker compose up -d postgres
+until docker compose exec -T postgres pg_isready ...; do sleep 1; done
 
-# Run migrations (via the tools container)
+# 4. Run migrations via the tools container
 docker compose --profile tools run --rm tools \
   pnpm --filter @workspace/db run push-force
 
-# Seed demo data (via the tools container)
+# 5. Optionally seed demo data
 docker compose --profile tools run --rm tools \
   pnpm --filter @workspace/scripts run seed
 
-# Start all services
-docker compose up -d
-
-# View logs
-docker compose logs -f api
-docker compose logs -f frontend
-
-# Stop everything
-docker compose down
+# 6. Start all services
+docker compose up -d --remove-orphans
 ```
+
+### update.sh (after git pull)
+
+```bash
+# 1. Rebuild changed images
+docker compose build --parallel
+
+# 2. Run migrations (idempotent — safe on every update)
+docker compose --profile tools run --rm tools \
+  pnpm --filter @workspace/db run push-force
+
+# 3. Restart services
+docker compose up -d --remove-orphans
+```
+
+### seed.sh
+
+```bash
+# Runs the tools container with:
+docker compose --profile tools run --rm tools \
+  pnpm --filter @workspace/scripts run seed
+```
+
+### Common docker compose commands
+
+```bash
+docker compose logs -f api        # stream API logs
+docker compose logs -f frontend   # stream frontend/nginx logs
+docker compose ps                 # show container status + health
+docker compose down               # stop and remove containers (data volumes kept)
+docker compose down -v            # stop and remove everything including volumes (destructive)
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| `docker compose build` fails on pnpm install | Stale or mismatched lockfile | Run `pnpm install` locally and commit updated `pnpm-lock.yaml` |
+| API container restarts immediately | `JWT_SECRET` not set in `.env` | Set it: `openssl rand -hex 64` |
+| CORS errors in browser | `FRONTEND_URL` doesn't match actual domain | Update `FRONTEND_URL` in `.env`, rebuild frontend: `docker compose build frontend && docker compose up -d` |
+| Migration fails | Tables already exist with different schema | Usually safe to retry. For destructive changes: `docker compose down -v` wipes data — use carefully |
+| Port 80 already in use | Another service on the host | Change `HTTP_PORT=8080` in `.env` and re-run `docker compose up -d` |
 
 ---
 
@@ -306,24 +417,6 @@ This is a v1 release. The following features have complete UI but use a simulate
 | Database           | **Real**| PostgreSQL with Drizzle ORM, full schema                 |
 | WebSocket          | **Real**| Connection, auth, live stats frame, reconnect logic      |
 | Schedules          | **Real**| node-cron runs on the API server, dispatches actions     |
-
----
-
-## Environment Variables
-
-All variables are set in `.env` (copy from `.env.example`).
-
-| Variable            | Required | Default           | Description                           |
-|---------------------|----------|-------------------|---------------------------------------|
-| `POSTGRES_PASSWORD` | **Yes**  | —                 | PostgreSQL password                   |
-| `POSTGRES_USER`     | No       | `eghpanel`        | PostgreSQL username                   |
-| `POSTGRES_DB`       | No       | `eghpanel`        | PostgreSQL database name              |
-| `REDIS_PASSWORD`    | No       | `changeme`        | Redis password                        |
-| `JWT_SECRET`        | **Yes**  | —                 | ≥64-char random hex (server will not start without it) |
-| `JWT_EXPIRES_IN`    | No       | `7d`              | JWT token expiry                      |
-| `FRONTEND_URL`      | No       | `http://localhost`| Public URL used for CORS              |
-| `HTTP_PORT`         | No       | `80`              | Host port nginx binds to              |
-| `NODE_ENV`          | No       | `development`     | Set to `production` in Docker         |
 
 ---
 
