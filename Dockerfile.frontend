@@ -1,5 +1,11 @@
 # ---- Build stage ----
-FROM node:22-alpine AS builder
+# Must use a glibc-based image (bookworm-slim, not alpine).
+# The pnpm lockfile is generated on a glibc host, so platform-specific
+# native packages (rollup, esbuild, @swc/core, lightningcss …) are
+# recorded as their linux-x64-gnu variants.  Alpine uses musl libc, so
+# those binaries are missing and pnpm install fails with
+#   "Cannot find module @rollup/rollup-linux-x64-musl"
+FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 
 ARG VITE_API_URL=/api
@@ -38,6 +44,7 @@ ENV VITE_API_URL=${VITE_API_URL} \
 RUN pnpm --filter @workspace/egh-panel run build
 
 # ---- Production stage ----
+# nginx is fine on Alpine — it ships pre-compiled glibc-free static bins.
 FROM nginx:1.27-alpine
 
 # Vite outputs to dist/public (outDir in vite.config.ts).

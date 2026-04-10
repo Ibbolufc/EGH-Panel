@@ -1,5 +1,10 @@
 # ---- Build stage ----
-FROM node:22-alpine AS builder
+# Must use a glibc-based image (bookworm-slim, not alpine).
+# The pnpm lockfile is generated on a glibc host, so platform-specific
+# native packages (esbuild, esbuild-plugin-pino …) are recorded as their
+# linux-x64-gnu variants.  Alpine uses musl libc and those binaries are
+# absent from the lockfile, causing pnpm install to abort.
+FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
@@ -29,10 +34,13 @@ COPY lib ./lib
 RUN pnpm --filter @workspace/api-server run build
 
 # ---- Production stage ----
+# Alpine is fine here: the API runs a pre-built esbuild bundle with only
+# pure-JS production deps (express, pg, ws, pino …).  No native build
+# tooling is needed at runtime, so musl is not a problem.
 FROM node:22-alpine AS production
 WORKDIR /app
 
-# curl is used by the HEALTHCHECK below; not present in alpine by default.
+# curl is used by the HEALTHCHECK; not included in Alpine by default.
 RUN apk add --no-cache curl
 
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
@@ -49,6 +57,7 @@ COPY --from=builder /app/lib/api-spec/package.json          ./lib/api-spec/
 COPY --from=builder /app/lib/api-client-react/package.json  ./lib/api-client-react/
 COPY --from=builder /app/scripts/package.json               ./scripts/
 
+# --prod skips devDeps (esbuild, rollup, vite …) so no musl issue here.
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy the esbuild bundle (includes pino worker files emitted by esbuild-plugin-pino)
