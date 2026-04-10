@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { User, useGetMe } from "@workspace/api-client-react";
 
 interface AuthContextType {
@@ -11,6 +12,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [token, setToken] = useState<string | null>(localStorage.getItem("egh_token"));
 
   const { data: user, isLoading: isUserLoading, error } = useGetMe({
@@ -24,8 +26,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) {
       localStorage.removeItem("egh_token");
       setToken(null);
+      queryClient.clear();
     }
-  }, [error]);
+  }, [error, queryClient]);
 
   const login = (newToken: string) => {
     localStorage.setItem("egh_token", newToken);
@@ -35,6 +38,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     localStorage.removeItem("egh_token");
     setToken(null);
+    // Clear the entire query cache so stale user data does not survive the
+    // logout.  Without this, useGetMe returns its cached result even after
+    // `enabled` flips to false, ProtectedRoute sees a non-null user and
+    // never redirects to /login.
+    queryClient.clear();
   };
 
   const isLoading = isUserLoading && !!token;
