@@ -1,6 +1,6 @@
 import { pgTable, serial, text, integer, boolean, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import { z } from "zod";
 
 export const nodeSchemeEnum = pgEnum("node_scheme", ["http", "https"]);
 export const nodeStatusEnum = pgEnum("node_status", ["online", "offline", "maintenance"]);

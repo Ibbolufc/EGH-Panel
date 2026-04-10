@@ -4,18 +4,25 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
-# Workspace root config files — must be present before any tsc/vite/esbuild step
-# because every tsconfig.json in the repo extends tsconfig.base.json by relative path.
+# Workspace root config files must arrive before any install or build step
+# because every package tsconfig extends tsconfig.base.json by relative path.
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY tsconfig.base.json tsconfig.json ./
 
-COPY artifacts/api-server/package.json ./artifacts/api-server/
-COPY lib/db/package.json ./lib/db/
-COPY lib/api-zod/package.json ./lib/api-zod/
-COPY lib/api-spec/package.json ./lib/api-spec/
+# Copy ALL workspace package.json files so pnpm can verify the lockfile
+# and create correct workspace symlinks.  pnpm --frozen-lockfile will fail
+# if any workspace package listed in pnpm-workspace.yaml is missing.
+COPY artifacts/api-server/package.json  ./artifacts/api-server/
+COPY artifacts/egh-panel/package.json   ./artifacts/egh-panel/
+COPY lib/db/package.json                ./lib/db/
+COPY lib/api-zod/package.json           ./lib/api-zod/
+COPY lib/api-spec/package.json          ./lib/api-spec/
+COPY lib/api-client-react/package.json  ./lib/api-client-react/
+COPY scripts/package.json               ./scripts/
 
 RUN pnpm install --frozen-lockfile
 
+# Copy source files needed by the API build
 COPY artifacts/api-server ./artifacts/api-server
 COPY lib ./lib
 
@@ -25,21 +32,26 @@ RUN pnpm --filter @workspace/api-server run build
 FROM node:22-alpine AS production
 WORKDIR /app
 
-# curl is required by the HEALTHCHECK below.  wget is available in Alpine
-# by default but curl is not; install it explicitly rather than relying on
-# the base image version.
+# curl is used by the HEALTHCHECK below; not present in alpine by default.
 RUN apk add --no-cache curl
 
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
-COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
-COPY --from=builder /app/artifacts/api-server/package.json ./artifacts/api-server/
-COPY --from=builder /app/lib/db/package.json ./lib/db/
-COPY --from=builder /app/lib/api-zod/package.json ./lib/api-zod/
-COPY --from=builder /app/lib/api-spec/package.json ./lib/api-spec/
+# Repeat all workspace package.json copies so pnpm can install --prod correctly.
+COPY --from=builder /app/package.json              ./
+COPY --from=builder /app/pnpm-workspace.yaml       ./
+COPY --from=builder /app/pnpm-lock.yaml            ./
+COPY --from=builder /app/artifacts/api-server/package.json  ./artifacts/api-server/
+COPY --from=builder /app/artifacts/egh-panel/package.json   ./artifacts/egh-panel/
+COPY --from=builder /app/lib/db/package.json                ./lib/db/
+COPY --from=builder /app/lib/api-zod/package.json           ./lib/api-zod/
+COPY --from=builder /app/lib/api-spec/package.json          ./lib/api-spec/
+COPY --from=builder /app/lib/api-client-react/package.json  ./lib/api-client-react/
+COPY --from=builder /app/scripts/package.json               ./scripts/
 
 RUN pnpm install --frozen-lockfile --prod
 
+# Copy the esbuild bundle (includes pino worker files emitted by esbuild-plugin-pino)
 COPY --from=builder /app/artifacts/api-server/dist ./artifacts/api-server/dist
 
 EXPOSE 8080

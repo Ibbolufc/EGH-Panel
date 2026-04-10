@@ -13,17 +13,23 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
-# Copy workspace root config files first — tsconfig.base.json must be present
-# before tsx/drizzle-kit runs because all project tsconfigs extend it by path.
-# Only manifests needed for migrations + seeding are copied here;
-# api-zod / api-spec / api-client-react are NOT needed.
+# Workspace root config files must arrive before any install or build step
+# because every package tsconfig extends tsconfig.base.json by relative path.
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY tsconfig.base.json tsconfig.json ./
 
-COPY lib/db/package.json ./lib/db/
-COPY scripts/package.json ./scripts/
+# Copy ALL workspace package.json files so pnpm can verify the lockfile
+# and create correct workspace symlinks.  pnpm --frozen-lockfile will fail
+# if any workspace package listed in pnpm-workspace.yaml is missing.
+COPY artifacts/api-server/package.json  ./artifacts/api-server/
+COPY artifacts/egh-panel/package.json   ./artifacts/egh-panel/
+COPY lib/db/package.json                ./lib/db/
+COPY lib/api-zod/package.json           ./lib/api-zod/
+COPY lib/api-spec/package.json          ./lib/api-spec/
+COPY lib/api-client-react/package.json  ./lib/api-client-react/
+COPY scripts/package.json               ./scripts/
 
-# Install ALL deps (not --prod) so drizzle-kit is available.
+# Install ALL deps (not --prod) so drizzle-kit and tsx are available.
 RUN pnpm install --frozen-lockfile
 
 # Copy source files required at runtime.

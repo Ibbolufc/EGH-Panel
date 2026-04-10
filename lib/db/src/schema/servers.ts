@@ -1,6 +1,6 @@
 import { pgTable, serial, text, integer, timestamp, pgEnum, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import { z } from "zod";
 import { usersTable } from "./users";
 import { nodesTable, allocationsTable } from "./nodes";
 import { eggsTable } from "./eggs";
