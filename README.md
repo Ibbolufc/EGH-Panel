@@ -71,7 +71,7 @@ Requirements: a Linux server with internet access (root or a user with `sudo`). 
 
 ---
 
-### Option A — Interactive one-command install *(recommended)*
+### Option A — One-command install *(recommended)*
 
 Run this single command on your server:
 
@@ -79,22 +79,26 @@ Run this single command on your server:
 curl -fsSL https://raw.githubusercontent.com/Ibbolufc/EGH-Panel/main/scripts/bootstrap.sh | bash
 ```
 
-The installer will interactively ask you for:
+**The installer is mostly automatic.** Here is what it does, in order:
 
-- Your public URL or server IP (e.g. `http://203.0.113.10` or `http://panel.example.com`)
-- PostgreSQL password
-- Redis password
-- JWT secret (auto-generated if you leave it blank)
-- HTTP port (default `80`)
-- Whether to load demo accounts
+| Step | What happens |
+|------|-------------|
+| Docker | Installs Docker + Compose automatically if not present |
+| Repository | Clones the repo (or pulls if already present) |
+| Secrets | **Auto-generates** `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, and `JWT_SECRET` using `openssl rand` and writes them to `.env` — no manual typing required |
+| Defaults | Sets `POSTGRES_USER=eghpanel`, `POSTGRES_DB=eghpanel`, `NODE_ENV=production` |
+| Prompts | Asks **only two questions**: your public URL/IP and HTTP port (both have sensible defaults — just press Enter to accept) |
+| Optional | Asks whether to load demo data (default: No) |
+| Build | Builds all Docker images, runs migrations, starts all services |
+| Summary | Prints the panel URL and lists which secrets were auto-generated |
 
-It then installs Docker if needed, clones the repository, writes your `.env`, builds all Docker images, runs database migrations, starts all services, and prints the panel URL at the end.
+**Re-run safe** — if `.env` already contains non-placeholder values they are preserved.
 
 **First build takes 5–15 minutes** on a fresh VPS. Subsequent builds are fast.
 
-**After the installer finishes, open the URL it prints — you'll be taken straight to the setup page to create your administrator account** (see [First-Time Setup](#first-time-setup) below).
+**After the installer finishes**, open the URL it prints — you will be taken straight to the first-run setup page to create your administrator account (see [First-Time Setup](#first-time-setup) below).
 
-**After install, update with:**
+**To update later:**
 
 ```bash
 cd EGH-Panel
@@ -122,49 +126,41 @@ git clone https://github.com/Ibbolufc/EGH-Panel.git
 cd EGH-Panel
 ```
 
-#### 2 — Create and configure .env
+#### 2 — Create .env
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and set **at minimum** these two values before proceeding:
+The install script auto-generates `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, and `JWT_SECRET` for you, so you only need to edit `.env` if you want to set your own values. The only things you might want to change manually beforehand:
 
 ```env
-POSTGRES_PASSWORD=choose_a_strong_password
-JWT_SECRET=         # generate: openssl rand -hex 64
+FRONTEND_URL=http://your-server-ip-or-domain
+HTTP_PORT=80
 ```
 
 Full variable reference:
 
-| Variable            | Required | Default            | Description                                   |
-|---------------------|----------|--------------------|-----------------------------------------------|
-| `POSTGRES_PASSWORD` | **Yes**  | —                  | PostgreSQL password. Must be changed.         |
-| `JWT_SECRET`        | **Yes**  | —                  | ≥64-char random hex. Server will not start without it. |
-| `POSTGRES_USER`     | No       | `eghpanel`         | PostgreSQL username                           |
-| `POSTGRES_DB`       | No       | `eghpanel`         | PostgreSQL database name                      |
-| `REDIS_PASSWORD`    | No       | `changeme`         | Redis password                                |
-| `FRONTEND_URL`      | No       | `http://localhost` | Your public URL. Used for CORS headers.       |
-| `HTTP_PORT`         | No       | `80`               | Host port nginx listens on                    |
+| Variable            | Auto-generated? | Default            | Description                                   |
+|---------------------|-----------------|--------------------|-----------------------------------------------|
+| `POSTGRES_PASSWORD` | **Yes**         | *(random 40-char hex)* | PostgreSQL password                       |
+| `REDIS_PASSWORD`    | **Yes**         | *(random 40-char hex)* | Redis password                            |
+| `JWT_SECRET`        | **Yes**         | *(random 128-char hex)* | JWT signing secret (512-bit entropy)     |
+| `POSTGRES_USER`     | Yes (default)   | `eghpanel`         | PostgreSQL username                           |
+| `POSTGRES_DB`       | Yes (default)   | `eghpanel`         | PostgreSQL database name                      |
+| `FRONTEND_URL`      | No              | `http://localhost` | Your public URL. Used for CORS headers.       |
+| `HTTP_PORT`         | No              | `80`               | Host port nginx listens on                    |
 
-#### 3 — Build Docker images
-
-```bash
-docker compose build --parallel
-```
-
-**Expect 5–15 minutes** on a fresh VPS. Four images are built: `api`, `frontend`, `tools` (migrations/seed), and pulls `postgres` + `redis` from Docker Hub.
-
-#### 4 — Run install script
+#### 3 — Run the install script
 
 ```bash
 chmod +x scripts/install.sh scripts/update.sh scripts/seed.sh
 ./scripts/install.sh [--seed | --no-seed]
 ```
 
-What it does in order: validates `.env`, starts postgres and waits for it to be ready, runs migrations, optionally seeds demo data, starts all services, and waits up to 90 s for the API health check.
+What it does: auto-generates any missing secrets, builds Docker images (5–15 min on first run), starts postgres, runs migrations, optionally seeds demo data, starts all services, and waits up to 90 s for the API health check.
 
-#### 5 — Verify
+#### 4 — Verify
 
 ```bash
 docker compose ps
