@@ -4,13 +4,8 @@ import { z } from "zod";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Shield, CheckCircle2 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import EghLogo from "@/components/ui/logo";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -134,6 +129,8 @@ export default function Setup() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-lg space-y-4">
+        <EghLogo subtitle="Initial Setup" />
+
         {/* Security notice */}
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
           <Shield className="mt-0.5 h-4 w-4 shrink-0" />
@@ -144,16 +141,7 @@ export default function Setup() {
         </div>
 
         <Card className="border-border/50 shadow-2xl">
-          <CardHeader className="space-y-1 text-center pb-4">
-            <CardTitle className="text-2xl font-bold tracking-tight text-primary">
-              EGH Panel
-            </CardTitle>
-            <CardDescription className="text-base">
-              Initial Setup — Create your administrator account
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
+          <CardContent className="pt-6">
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}

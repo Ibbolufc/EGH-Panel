@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/components/providers/auth-provider";
+import EghLogo from "@/components/ui/logo";
 
 const formSchema = z.object({
   email: z.string().min(1, "Required"),
@@ -44,11 +45,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-6">
-      {/* Wordmark */}
-      <div className="text-center select-none">
-        <p className="text-2xl font-bold tracking-tight text-foreground">EGH Panel</p>
-        <p className="text-xs text-muted-foreground mt-1 tracking-widest uppercase">Game Server Control Panel</p>
-      </div>
+      <EghLogo />
 
       {/* Login card */}
       <Card className="w-full max-w-sm border-border/50 shadow-xl">

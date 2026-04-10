@@ -3,9 +3,10 @@ import { Link, useLocation, useParams } from "wouter";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
   Server, Terminal, FolderOpen, Play, HardDrive, Clock, User, Home,
-  LogOut, Menu, X, Shield, ChevronRight
+  LogOut, Menu, X, ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import EghLogo from "@/components/ui/logo";
 import { useListServers } from "@workspace/api-client-react";
 
 const mainNav = [
@@ -52,13 +53,7 @@ export function ClientLayout({ children, title }: ClientLayoutProps) {
       >
         {/* Logo */}
         <div className="flex h-14 items-center gap-3 border-b border-border px-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-            <Shield className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <span className="text-sm font-bold text-foreground">EGH Panel</span>
-            <div className="text-xs text-muted-foreground">Client</div>
-          </div>
+          <EghLogo variant="compact" subtitle="Client" />
           <button
             className="ml-auto lg:hidden text-muted-foreground hover:text-foreground"
             onClick={() => setSidebarOpen(false)}

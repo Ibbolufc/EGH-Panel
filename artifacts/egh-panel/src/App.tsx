@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -53,7 +53,7 @@ async function fetchSetupStatus(): Promise<{ setupRequired: boolean }> {
  *  • On error: let through so the app can show a useful page instead of freezing
  */
 function SetupGuard({ children }: { children: React.ReactNode }) {
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const { data, isLoading } = useQuery({
     queryKey: ["setup-status"],
     queryFn: fetchSetupStatus,
@@ -73,13 +73,11 @@ function SetupGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (data?.setupRequired && location !== "/setup") {
-    setLocation("/setup");
-    return null;
+    return <Redirect to="/setup" />;
   }
 
   if (data && !data.setupRequired && location === "/setup") {
-    setLocation("/login");
-    return null;
+    return <Redirect to="/login" />;
   }
 
   return <>{children}</>;
@@ -87,7 +85,6 @@ function SetupGuard({ children }: { children: React.ReactNode }) {
 
 function ProtectedRoute({ component: Component, allowedRoles, ...rest }: any) {
   const { user, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
 
   if (isLoading) {
     return (
@@ -101,17 +98,11 @@ function ProtectedRoute({ component: Component, allowedRoles, ...rest }: any) {
   }
 
   if (!user) {
-    setLocation("/login");
-    return null;
+    return <Redirect to="/login" />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    if (user.role === "client") {
-      setLocation("/client");
-    } else {
-      setLocation("/admin");
-    }
-    return null;
+    return <Redirect to={user.role === "client" ? "/client" : "/admin"} />;
   }
 
   return <Component {...rest} />;

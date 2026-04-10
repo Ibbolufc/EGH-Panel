@@ -3,9 +3,10 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
   LayoutDashboard, Users, Server, Cpu, Egg, Activity, Settings,
-  LogOut, Menu, X, ChevronDown, Shield, Globe
+  LogOut, Menu, X, ChevronDown, Globe
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import EghLogo from "@/components/ui/logo";
 
 const navItems = [
   { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
@@ -39,13 +40,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
       >
         {/* Logo */}
         <div className="flex h-14 items-center gap-3 border-b border-border px-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
-            <Shield className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <span className="text-sm font-bold text-foreground">EGH Panel</span>
-            <div className="text-xs text-muted-foreground">Admin</div>
-          </div>
+          <EghLogo variant="compact" subtitle="Admin" />
           <button
             className="ml-auto lg:hidden text-muted-foreground hover:text-foreground"
             onClick={() => setSidebarOpen(false)}
