@@ -390,6 +390,14 @@ fi
 
 # ── Public URL ────────────────────────────────────────────────────────────────
 _CUR_URL="$(get_env_var FRONTEND_URL)"
+
+# Treat obviously-placeholder URL values (http://IP, http://YOUR_IP, …) the
+# same as empty — they came from old .env.example templates and must not be
+# silently passed through as the real URL.
+if [[ "${_CUR_URL}" =~ ^https?://(IP|YOUR_IP|SERVER_IP|server-ip|your-server|your-ip|example\.com)(:[0-9]+)?/?$ ]]; then
+  _CUR_URL=""
+fi
+
 _DEFAULT_URL="${FLAG_URL:-${_CUR_URL:-http://localhost}}"
 
 if [[ -n "${NON_INTERACTIVE}" ]]; then
@@ -399,7 +407,16 @@ else
   read -r -p "  Public URL or IP  [${_DEFAULT_URL}]: " _INPUT_URL <"${TTY}"
   FRONTEND_URL="${_INPUT_URL:-${_DEFAULT_URL}}"
 fi
+
+# Strip trailing slash
 FRONTEND_URL="${FRONTEND_URL%/}"
+
+# Ensure a scheme is present — a bare IP or hostname entered without http://
+# must be normalised now so every downstream consumer sees a full URL.
+if [[ -n "${FRONTEND_URL}" && ! "${FRONTEND_URL}" =~ ^https?:// ]]; then
+  FRONTEND_URL="http://${FRONTEND_URL}"
+fi
+
 set_env_var "FRONTEND_URL" "${FRONTEND_URL}"
 
 # ── HTTP port with conflict detection ────────────────────────────────────────
