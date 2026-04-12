@@ -208,6 +208,19 @@ set_env_var() {
   mv "${tmpfile}" .env
 }
 
+# Try to detect this server's public IPv4 via well-known echo services (best-effort)
+_detect_public_ip() {
+  local ip=""
+  for _svc in "https://api.ipify.org" "https://ifconfig.me" "https://icanhazip.com"; do
+    ip=$(curl -sf --max-time 4 "${_svc}" 2>/dev/null | tr -d '[:space:]' || true)
+    if [[ "${ip}" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+      echo "${ip}"
+      return
+    fi
+    ip=""
+  done
+}
+
 gen_hex() {
   local n="${1:-32}"
   if command -v openssl >/dev/null 2>&1; then
@@ -391,14 +404,45 @@ fi
 # ── Public URL ────────────────────────────────────────────────────────────────
 _CUR_URL="$(get_env_var FRONTEND_URL)"
 
-# Treat obviously-placeholder URL values (http://IP, http://YOUR_IP, …) the
-# same as empty — they came from old .env.example templates and must not be
-# silently passed through as the real URL.
-if [[ "${_CUR_URL}" =~ ^https?://(IP|YOUR_IP|SERVER_IP|server-ip|your-server|your-ip|example\.com)(:[0-9]+)?/?$ ]]; then
+# Treat any obviously-placeholder URL as empty so the user gets a real default.
+# Catches: http://IP  http://#IP  http://YOUR_IP  http://server-ip  etc.
+# Rule 1: host part contains # (never valid in a URL host)
+# Rule 2: host part matches a known template token word (case-insensitive)
+_url_is_placeholder() {
+  local u="${1,,}"   # lowercase for comparison
+  # Strip scheme
+  local host="${u#http://}"; host="${host#https://}"
+  # Strip port and path
+  host="${host%%:*}"; host="${host%%/*}"
+  # Any # in the host → placeholder
+  [[ "${host}" == *"#"* ]] && return 0
+  # Known template tokens
+  case "${host}" in
+    ip|"#ip"|your_ip|server_ip|server-ip|your-server|your-ip|"your.ip"|"server.ip"|"example.com") return 0 ;;
+  esac
+  return 1
+}
+if _url_is_placeholder "${_CUR_URL}"; then
   _CUR_URL=""
 fi
 
-_DEFAULT_URL="${FLAG_URL:-${_CUR_URL:-http://localhost}}"
+# If no real URL is configured yet, try to detect the server's public IP so
+# the prompt shows an actionable default instead of http://localhost.
+_AUTO_IP=""
+if [[ -z "${_CUR_URL}" && -z "${FLAG_URL}" ]]; then
+  info "Detecting server IP for default URL (press Ctrl-C to skip)..."
+  _AUTO_IP=$(_detect_public_ip || true)
+fi
+
+if [[ -n "${FLAG_URL}" ]]; then
+  _DEFAULT_URL="${FLAG_URL}"
+elif [[ -n "${_CUR_URL}" ]]; then
+  _DEFAULT_URL="${_CUR_URL}"
+elif [[ -n "${_AUTO_IP}" ]]; then
+  _DEFAULT_URL="http://${_AUTO_IP}"
+else
+  _DEFAULT_URL="http://localhost"
+fi
 
 if [[ -n "${NON_INTERACTIVE}" ]]; then
   FRONTEND_URL="${_DEFAULT_URL}"
