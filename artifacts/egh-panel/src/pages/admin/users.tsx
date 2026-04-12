@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { useListUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@workspace/api-client-react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Plus, Search, Pencil, Trash2, Users } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Users, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -10,40 +10,58 @@ import { cn } from "@/lib/utils";
 const inputClass = "w-full rounded-lg border border-border/60 bg-input/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-colors";
 const labelClass = "block text-xs font-medium text-muted-foreground mb-1.5";
 
+const ROLE_FILTERS = [
+  { label: "All",        value: "" },
+  { label: "Client",     value: "client" },
+  { label: "Admin",      value: "admin" },
+  { label: "Super Admin", value: "super_admin" },
+];
+
 export default function AdminUsers() {
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<any>(null);
-  const { data, isLoading, refetch } = useListUsers({ page: 1, limit: 50 });
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const { data, isLoading, refetch } = useListUsers({ page: 1, limit: 100 });
   const deleteUser = useDeleteUser();
   const { toast } = useToast();
 
   const users = data?.data ?? [];
-  const filtered = users.filter((u: any) =>
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
-    u.username?.toLowerCase().includes(search.toLowerCase()) ||
-    `${u.firstName} ${u.lastName}`.toLowerCase().includes(search.toLowerCase())
-  );
+
+  const filtered = users.filter((u: any) => {
+    const matchesSearch =
+      u.email.toLowerCase().includes(search.toLowerCase()) ||
+      u.username?.toLowerCase().includes(search.toLowerCase()) ||
+      `${u.firstName} ${u.lastName}`.toLowerCase().includes(search.toLowerCase());
+    const matchesRole = roleFilter ? u.role === roleFilter : true;
+    return matchesSearch && matchesRole;
+  });
 
   async function handleDelete(id: number) {
     if (!confirm("Delete this user? This cannot be undone.")) return;
+    setDeletingId(id);
     try {
       await deleteUser.mutateAsync({ id });
       toast({ title: "User deleted" });
       refetch();
     } catch {
       toast({ title: "Failed to delete user", variant: "destructive" });
+    } finally {
+      setDeletingId(null);
     }
   }
 
   return (
     <AdminLayout title="Users">
-      <div className="space-y-5">
+      <div className="space-y-4">
         {/* Page header */}
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground">Users</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">Manage user accounts and permissions</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {isLoading ? "Loading…" : `${users.length} account${users.length !== 1 ? "s" : ""}${filtered.length !== users.length ? ` · ${filtered.length} shown` : ""}`}
+            </p>
           </div>
           <button
             onClick={() => setShowCreate(true)}
@@ -55,17 +73,42 @@ export default function AdminUsers() {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-          <input
-            type="text"
-            placeholder="Search by name, email or username…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={cn(inputClass, "pl-9")}
-            data-testid="input-search-users"
-          />
+        {/* Filters row */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+            <input
+              type="text"
+              placeholder="Search by name, email or username…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className={cn(inputClass, "pl-9")}
+              data-testid="input-search-users"
+            />
+          </div>
+          {/* Role filter pills */}
+          <div className="flex gap-1.5 shrink-0 flex-wrap">
+            {ROLE_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setRoleFilter(f.value)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap",
+                  roleFilter === f.value
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-border/60 text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                )}
+              >
+                {f.label}
+                {f.value && !isLoading && (
+                  <span className="ml-1.5 text-[10px] opacity-70">
+                    {users.filter((u: any) => u.role === f.value).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Table */}
@@ -82,7 +125,7 @@ export default function AdminUsers() {
             </thead>
             <tbody className="divide-y divide-border/40">
               {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
+                Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -96,9 +139,7 @@ export default function AdminUsers() {
                     <td className="px-4 py-3 hidden sm:table-cell"><Skeleton className="h-3 w-20 rounded" /></td>
                     <td className="px-4 py-3"><Skeleton className="h-5 w-14 rounded-md" /></td>
                     <td className="px-4 py-3 hidden md:table-cell"><Skeleton className="h-3 w-20 rounded" /></td>
-                    <td className="px-4 py-3 text-right">
-                      <Skeleton className="h-6 w-12 rounded ml-auto" />
-                    </td>
+                    <td className="px-4 py-3 text-right"><Skeleton className="h-6 w-14 rounded ml-auto" /></td>
                   </tr>
                 ))
               ) : filtered.length === 0 ? (
@@ -109,10 +150,10 @@ export default function AdminUsers() {
                         <Users className="h-5 w-5 text-muted-foreground/50" />
                       </div>
                       <p className="text-sm font-medium text-foreground">
-                        {search ? "No users match your search" : "No users yet"}
+                        {search || roleFilter ? "No users match these filters" : "No users yet"}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {search ? "Try a different keyword" : "Create the first user account"}
+                        {search || roleFilter ? "Try clearing the search or role filter" : "Create the first user account to get started"}
                       </p>
                     </div>
                   </td>
@@ -154,11 +195,15 @@ export default function AdminUsers() {
                         </button>
                         <button
                           onClick={() => handleDelete(user.id)}
-                          className="rounded-md p-1.5 text-muted-foreground/50 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                          disabled={deletingId === user.id}
+                          className="rounded-md p-1.5 text-muted-foreground/50 hover:bg-red-500/10 hover:text-red-400 transition-colors disabled:opacity-50"
                           data-testid={`button-delete-user-${user.id}`}
                           title="Delete user"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          {deletingId === user.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Trash2 className="h-3.5 w-3.5" />
+                          }
                         </button>
                       </div>
                     </td>
@@ -187,25 +232,31 @@ export default function AdminUsers() {
   );
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-xl border border-border/60 bg-card p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-foreground mb-5">{title}</h3>
+        <div className="mb-5">
+          <h3 className="text-base font-semibold text-foreground">{title}</h3>
+          {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+        </div>
         {children}
       </div>
     </div>
   );
 }
 
-function ModalFooter({ onClose, pending, submitLabel }: { onClose: () => void; pending: boolean; submitLabel: string }) {
+function ModalFooter({ onClose, pending, submitLabel, destructive }: { onClose: () => void; pending: boolean; submitLabel: string; destructive?: boolean }) {
   return (
     <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-border/40">
       <button type="button" onClick={onClose} className="rounded-lg border border-border/60 px-4 py-2 text-sm text-muted-foreground hover:bg-white/5 transition-colors">
         Cancel
       </button>
-      <button type="submit" disabled={pending} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50">
-        {pending ? "Saving…" : submitLabel}
+      <button type="submit" disabled={pending} className={cn(
+        "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50",
+        destructive ? "bg-red-500 hover:bg-red-600" : "bg-primary hover:bg-primary/90"
+      )}>
+        {pending ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : submitLabel}
       </button>
     </div>
   );
@@ -220,7 +271,7 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     e.preventDefault();
     try {
       await createUser.mutateAsync({ data: form });
-      toast({ title: "User created successfully" });
+      toast({ title: "User created", description: `${form.firstName} ${form.lastName} can now sign in.` });
       onSuccess();
     } catch (err: any) {
       toast({ title: err?.message ?? "Failed to create user", variant: "destructive" });
@@ -228,7 +279,7 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   }
 
   return (
-    <Modal title="Create New User" onClose={onClose}>
+    <Modal title="Create User" subtitle="The user will be able to sign in immediately." onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -250,14 +301,14 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         </div>
         <div>
           <label className={labelClass}>Password</label>
-          <input type="password" placeholder="••••••••••••" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className={inputClass} required data-testid="input-password" />
+          <input type="password" placeholder="••••••••" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className={inputClass} required minLength={8} data-testid="input-password" />
         </div>
         <div>
           <label className={labelClass}>Role</label>
           <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className={inputClass} data-testid="select-role">
-            <option value="client">Client</option>
-            <option value="admin">Admin</option>
-            <option value="super_admin">Super Admin</option>
+            <option value="client">Client — server access only</option>
+            <option value="admin">Admin — full panel access</option>
+            <option value="super_admin">Super Admin — unrestricted</option>
           </select>
         </div>
         <ModalFooter onClose={onClose} pending={createUser.isPending} submitLabel="Create User" />
@@ -283,7 +334,7 @@ function EditUserModal({ user, onClose, onSuccess }: { user: any; onClose: () =>
   }
 
   return (
-    <Modal title="Edit User" onClose={onClose}>
+    <Modal title="Edit User" subtitle={`Editing ${user.firstName} ${user.lastName}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -302,9 +353,9 @@ function EditUserModal({ user, onClose, onSuccess }: { user: any; onClose: () =>
         <div>
           <label className={labelClass}>Role</label>
           <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className={inputClass}>
-            <option value="client">Client</option>
-            <option value="admin">Admin</option>
-            <option value="super_admin">Super Admin</option>
+            <option value="client">Client — server access only</option>
+            <option value="admin">Admin — full panel access</option>
+            <option value="super_admin">Super Admin — unrestricted</option>
           </select>
         </div>
         <ModalFooter onClose={onClose} pending={updateUser.isPending} submitLabel="Save Changes" />

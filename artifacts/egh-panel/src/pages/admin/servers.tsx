@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { useListServers, useListNodes, useListEggs, useListUsers, useCreateServer, useDeleteServer } from "@workspace/api-client-react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Plus, Search, Server, Trash2, MemoryStick, HardDrive } from "lucide-react";
+import { Plus, Search, Server, Trash2, MemoryStick, HardDrive, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,38 +16,57 @@ function formatMB(mb: number): string {
   return `${mb} MB`;
 }
 
+const STATUS_FILTERS = [
+  { label: "All",         value: "" },
+  { label: "Running",     value: "running" },
+  { label: "Offline",     value: "offline" },
+  { label: "Installing",  value: "installing" },
+  { label: "Suspended",   value: "suspended" },
+];
+
 export default function AdminServers() {
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const { data, isLoading, refetch } = useListServers({ page: 1, limit: 50 });
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const { data, isLoading, refetch } = useListServers({ page: 1, limit: 100 });
   const deleteServer = useDeleteServer();
   const { toast } = useToast();
 
   const servers = data?.data ?? [];
-  const filtered = servers.filter((s: any) =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.status?.toLowerCase().includes(search.toLowerCase())
-  );
+
+  const filtered = servers.filter((s: any) => {
+    const matchesSearch =
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.description?.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter ? s.status === statusFilter : true;
+    return matchesSearch && matchesStatus;
+  });
 
   async function handleDelete(id: number) {
-    if (!confirm("Delete this server? This cannot be undone.")) return;
+    if (!confirm("Delete this server? All data will be permanently lost.")) return;
+    setDeletingId(id);
     try {
       await deleteServer.mutateAsync({ id });
       toast({ title: "Server deleted" });
       refetch();
     } catch {
       toast({ title: "Failed to delete server", variant: "destructive" });
+    } finally {
+      setDeletingId(null);
     }
   }
 
   return (
     <AdminLayout title="Servers">
-      <div className="space-y-5">
+      <div className="space-y-4">
         {/* Page header */}
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground">Servers</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">Manage all game servers across your nodes</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {isLoading ? "Loading…" : `${servers.length} server${servers.length !== 1 ? "s" : ""}${filtered.length !== servers.length ? ` · ${filtered.length} shown` : ""}`}
+            </p>
           </div>
           <button
             onClick={() => setShowCreate(true)}
@@ -59,16 +78,39 @@ export default function AdminServers() {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-          <input
-            type="text"
-            placeholder="Search servers by name or status…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={cn(inputClass, "pl-9")}
-          />
+        {/* Filters row */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+            <input
+              type="text"
+              placeholder="Search servers by name…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className={cn(inputClass, "pl-9")}
+            />
+          </div>
+          <div className="flex gap-1.5 shrink-0 flex-wrap">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setStatusFilter(f.value)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap",
+                  statusFilter === f.value
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-border/60 text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                )}
+              >
+                {f.label}
+                {f.value && !isLoading && (
+                  <span className="ml-1.5 text-[10px] opacity-70">
+                    {servers.filter((s: any) => s.status === f.value).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Table */}
@@ -85,7 +127,7 @@ export default function AdminServers() {
             </thead>
             <tbody className="divide-y divide-border/40">
               {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
+                Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -97,7 +139,12 @@ export default function AdminServers() {
                       </div>
                     </td>
                     <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-md" /></td>
-                    <td className="px-4 py-3 hidden sm:table-cell"><Skeleton className="h-8 w-28 rounded" /></td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-3 w-20 rounded" />
+                        <Skeleton className="h-3 w-16 rounded" />
+                      </div>
+                    </td>
                     <td className="px-4 py-3 hidden md:table-cell"><Skeleton className="h-3 w-16 rounded" /></td>
                     <td className="px-4 py-3 text-right"><Skeleton className="h-6 w-6 rounded ml-auto" /></td>
                   </tr>
@@ -110,10 +157,10 @@ export default function AdminServers() {
                         <Server className="h-5 w-5 text-muted-foreground/50" />
                       </div>
                       <p className="text-sm font-medium text-foreground">
-                        {search ? "No servers match your search" : "No servers yet"}
+                        {search || statusFilter ? "No servers match these filters" : "No servers yet"}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {search ? "Try a different keyword" : "Create your first server to get started"}
+                        {search || statusFilter ? "Try clearing your search or status filter" : "Create your first server to get started"}
                       </p>
                     </div>
                   </td>
@@ -128,7 +175,7 @@ export default function AdminServers() {
                         </div>
                         <div className="min-w-0">
                           <Link href={`/client/servers/${server.id}`}>
-                            <a className="font-medium text-foreground hover:text-primary transition-colors">
+                            <a className="font-medium text-foreground hover:text-primary transition-colors truncate block">
                               {server.name}
                             </a>
                           </Link>
@@ -157,11 +204,15 @@ export default function AdminServers() {
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => handleDelete(server.id)}
-                        className="rounded-md p-1.5 text-muted-foreground/50 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                        disabled={deletingId === server.id}
+                        className="rounded-md p-1.5 text-muted-foreground/50 hover:bg-red-500/10 hover:text-red-400 transition-colors disabled:opacity-50"
                         data-testid={`button-delete-server-${server.id}`}
                         title="Delete server"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        {deletingId === server.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Trash2 className="h-3.5 w-3.5" />
+                        }
                       </button>
                     </td>
                   </tr>
@@ -195,7 +246,7 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     e.preventDefault();
     try {
       await createServer.mutateAsync({ data: form });
-      toast({ title: "Server created successfully" });
+      toast({ title: "Server created", description: `"${form.name}" is being set up.` });
       onSuccess();
     } catch {
       toast({ title: "Failed to create server", variant: "destructive" });
@@ -205,7 +256,10 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto p-4">
       <div className="w-full max-w-lg rounded-xl border border-border/60 bg-card p-6 shadow-2xl my-8">
-        <h3 className="text-base font-semibold text-foreground mb-5">Create Server</h3>
+        <div className="mb-5">
+          <h3 className="text-base font-semibold text-foreground">Create Server</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">Configure the server and assign it to a user and node.</p>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>Server Name</label>
@@ -214,13 +268,13 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className={inputClass}
-              required data-testid="input-server-name"
+              required autoFocus data-testid="input-server-name"
             />
           </div>
           <div>
-            <label className={labelClass}>Description <span className="text-muted-foreground/50 font-normal">(optional)</span></label>
+            <label className={labelClass}>Description <span className="text-muted-foreground/40 font-normal">(optional)</span></label>
             <input
-              placeholder="Optional description"
+              placeholder="e.g. Survival world, port 25565"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               className={inputClass}
@@ -245,36 +299,39 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             </div>
           </div>
           <div>
-            <label className={labelClass}>Egg (Game Type)</label>
+            <label className={labelClass}>Egg (Game Template)</label>
             <select value={form.eggId} onChange={(e) => setForm({ ...form, eggId: Number(e.target.value) })}
               className={inputClass} required>
               <option value={0}>Select egg…</option>
               {(eggs?.data ?? []).map((eg: any) => <option key={eg.id} value={eg.id}>{eg.name}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className={labelClass}>RAM (MB)</label>
-              <input type="number" value={form.memoryLimit} onChange={(e) => setForm({ ...form, memoryLimit: Number(e.target.value) })}
-                className={inputClass} min={128} required />
-            </div>
-            <div>
-              <label className={labelClass}>Disk (MB)</label>
-              <input type="number" value={form.diskLimit} onChange={(e) => setForm({ ...form, diskLimit: Number(e.target.value) })}
-                className={inputClass} min={512} required />
-            </div>
-            <div>
-              <label className={labelClass}>CPU (%)</label>
-              <input type="number" value={form.cpuLimit} onChange={(e) => setForm({ ...form, cpuLimit: Number(e.target.value) })}
-                className={inputClass} min={1} max={800} required />
+          <div>
+            <label className={labelClass}>Resources</label>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-[10px] text-muted-foreground mb-1">RAM (MB)</p>
+                <input type="number" value={form.memoryLimit} onChange={(e) => setForm({ ...form, memoryLimit: Number(e.target.value) })}
+                  className={inputClass} min={128} required />
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground mb-1">Disk (MB)</p>
+                <input type="number" value={form.diskLimit} onChange={(e) => setForm({ ...form, diskLimit: Number(e.target.value) })}
+                  className={inputClass} min={512} required />
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground mb-1">CPU (%)</p>
+                <input type="number" value={form.cpuLimit} onChange={(e) => setForm({ ...form, cpuLimit: Number(e.target.value) })}
+                  className={inputClass} min={1} max={800} required />
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
             <button type="button" onClick={onClose} className="rounded-lg border border-border/60 px-4 py-2 text-sm text-muted-foreground hover:bg-white/5 transition-colors">
               Cancel
             </button>
-            <button type="submit" disabled={createServer.isPending} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50">
-              {createServer.isPending ? "Creating…" : "Create Server"}
+            <button type="submit" disabled={createServer.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50">
+              {createServer.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Creating…</> : "Create Server"}
             </button>
           </div>
         </form>
