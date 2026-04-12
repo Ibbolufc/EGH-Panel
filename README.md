@@ -79,26 +79,63 @@ Run this single command on your server:
 curl -fsSL https://raw.githubusercontent.com/Ibbolufc/EGH-Panel/main/scripts/bootstrap.sh | bash
 ```
 
-**The installer is mostly automatic.** Here is what it does, in order:
+**The installer handles everything for you.** Here is exactly what happens:
 
 | Step | What happens |
 |------|-------------|
 | Docker | Installs Docker + Compose automatically if not present |
-| Repository | Clones the repo (or pulls if already present) |
-| Secrets | **Auto-generates** `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, and `JWT_SECRET` using `openssl rand` and writes them to `.env` — no manual typing required |
+| Repository | Clones the repo (or pulls latest if already cloned) |
+| Existing install | Detects a previous install and offers: update in place, clean reinstall, or abort |
+| Secrets | **Auto-generates** `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, and `JWT_SECRET` using `openssl rand` — no manual typing required |
 | Defaults | Sets `POSTGRES_USER=eghpanel`, `POSTGRES_DB=eghpanel`, `NODE_ENV=production` |
-| Prompts | Asks **only two questions**: your public URL/IP and HTTP port (both have sensible defaults — just press Enter to accept) |
-| Optional | Asks whether to load demo data (default: No) |
-| Build | Builds all Docker images, runs migrations, starts all services |
-| Summary | Prints the panel URL and lists which secrets were auto-generated |
+| Port check | Detects if your chosen port is already in use and suggests a free alternative |
+| Prompts | Asks **three questions**: public URL/IP, HTTP port, and whether to load demo accounts — all have sensible defaults, press Enter to accept |
+| Confirmation | Shows a summary of chosen settings before starting the build |
+| Build | Builds Docker images, runs schema migrations, optionally seeds demo data, starts all services |
+| Verification | Checks each container status and pings the API health endpoint |
+| Summary | Prints the panel URL, key commands, and saves `egh-install-info.txt` |
 
-**Re-run safe** — if `.env` already contains non-placeholder values they are preserved.
+**Re-run safe** — existing `.env` secrets are preserved; you are asked before overwriting data.
 
 **First build takes 5–15 minutes** on a fresh VPS. Subsequent builds are fast.
 
-**After the installer finishes**, open the URL it prints — you will be taken straight to the first-run setup page to create your administrator account (see [First-Time Setup](#first-time-setup) below).
+**After install finishes**, open the URL it prints — you will be taken to the first-run setup page to create your administrator account (see [First-Time Setup](#first-time-setup) below).
 
-**To update later:**
+**`egh-install-info.txt`** is saved in the install directory with your panel URL, port, and all maintenance commands in one place.
+
+---
+
+#### Non-interactive mode (CI / automation)
+
+Skip all prompts by passing flags or environment variables:
+
+```bash
+# Using flags
+bash scripts/bootstrap.sh --non-interactive --url http://203.0.113.10 --port 8080 --no-seed
+
+# Using environment variables (useful when piping from curl)
+EGH_URL=http://203.0.113.10 EGH_PORT=8080 EGH_SEED=no EGH_NON_INTERACTIVE=1 \
+  curl -fsSL https://raw.githubusercontent.com/Ibbolufc/EGH-Panel/main/scripts/bootstrap.sh | bash
+```
+
+| Flag | Env var | Description |
+|------|---------|-------------|
+| `--non-interactive` | `EGH_NON_INTERACTIVE=1` | Skip all prompts, use defaults / overrides |
+| `--url <URL>` | `EGH_URL=http://...` | Public URL or IP |
+| `--port <PORT>` | `EGH_PORT=80` | HTTP port nginx binds on the host |
+| `--seed` | `EGH_SEED=yes` | Load demo accounts |
+| `--no-seed` | `EGH_SEED=no` | Skip demo data |
+| `--clean` | `EGH_CLEAN=1` | Wipe existing containers and volumes first |
+
+---
+
+#### Existing reverse proxy / port 80 already in use
+
+If you already have Nginx, Caddy, or another web server on port 80, the installer will detect this and suggest a free alternative port (e.g. `8080`). Choose that port, then point your existing reverse proxy at `http://localhost:8080`. The installer also shows this if you dismiss the suggestion.
+
+---
+
+#### To update later
 
 ```bash
 cd EGH-Panel
@@ -132,7 +169,7 @@ cd EGH-Panel
 cp .env.example .env
 ```
 
-The install script auto-generates `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, and `JWT_SECRET` for you, so you only need to edit `.env` if you want to set your own values. The only things you might want to change manually beforehand:
+The install script auto-generates all secrets, so you only need to set:
 
 ```env
 FRONTEND_URL=http://your-server-ip-or-domain
@@ -141,15 +178,15 @@ HTTP_PORT=80
 
 Full variable reference:
 
-| Variable            | Auto-generated? | Default            | Description                                   |
-|---------------------|-----------------|--------------------|-----------------------------------------------|
-| `POSTGRES_PASSWORD` | **Yes**         | *(random 40-char hex)* | PostgreSQL password                       |
-| `REDIS_PASSWORD`    | **Yes**         | *(random 40-char hex)* | Redis password                            |
-| `JWT_SECRET`        | **Yes**         | *(random 128-char hex)* | JWT signing secret (512-bit entropy)     |
-| `POSTGRES_USER`     | Yes (default)   | `eghpanel`         | PostgreSQL username                           |
-| `POSTGRES_DB`       | Yes (default)   | `eghpanel`         | PostgreSQL database name                      |
-| `FRONTEND_URL`      | No              | `http://localhost` | Your public URL. Used for CORS headers.       |
-| `HTTP_PORT`         | No              | `80`               | Host port nginx listens on                    |
+| Variable            | Auto-generated? | Default                  | Description                              |
+|---------------------|-----------------|--------------------------|------------------------------------------|
+| `POSTGRES_PASSWORD` | **Yes**         | *(random 40-char hex)*   | PostgreSQL password                      |
+| `REDIS_PASSWORD`    | **Yes**         | *(random 40-char hex)*   | Redis password                           |
+| `JWT_SECRET`        | **Yes**         | *(random 128-char hex)*  | JWT signing secret (512-bit entropy)     |
+| `POSTGRES_USER`     | Yes (default)   | `eghpanel`               | PostgreSQL username                      |
+| `POSTGRES_DB`       | Yes (default)   | `eghpanel`               | PostgreSQL database name                 |
+| `FRONTEND_URL`      | No              | `http://localhost`       | Your public URL (used for CORS headers)  |
+| `HTTP_PORT`         | No              | `80`                     | Host port nginx listens on               |
 
 #### 3 — Run the install script
 
@@ -158,7 +195,7 @@ chmod +x scripts/install.sh scripts/update.sh scripts/seed.sh
 ./scripts/install.sh [--seed | --no-seed]
 ```
 
-What it does: auto-generates any missing secrets, builds Docker images (5–15 min on first run), starts postgres, runs migrations, optionally seeds demo data, starts all services, and waits up to 90 s for the API health check.
+The script auto-generates any missing secrets, builds Docker images (5–15 min first run), starts postgres, runs schema migrations, optionally seeds demo data, starts all services, and waits up to 90 s for the API health check. If any step fails it prints the exact recovery command to run.
 
 #### 4 — Verify
 
@@ -168,7 +205,17 @@ curl http://localhost/api/healthz
 # → {"status":"ok","uptime":...}
 ```
 
-Open `http://your-server-ip` in a browser — on a fresh install with no users you will be taken straight to the setup page (see [First-Time Setup](#first-time-setup) below).
+Open `http://your-server-ip` in a browser — on a fresh install you will be taken to the setup page (see [First-Time Setup](#first-time-setup) below).
+
+#### Troubleshooting
+
+| Problem | Command |
+|---------|---------|
+| A service won't start | `docker compose logs <service>` |
+| Migrations failed | `docker compose logs tools` |
+| API not healthy | `docker compose logs api` |
+| Port already in use | Change `HTTP_PORT` in `.env` → `docker compose up -d` |
+| Start fresh | `docker compose down -v && bash scripts/bootstrap.sh --clean` |
 
 ---
 
