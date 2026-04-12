@@ -3,11 +3,12 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const nodeSchemeEnum = pgEnum("node_scheme", ["http", "https"]);
-export const nodeStatusEnum = pgEnum("node_status", ["online", "offline", "maintenance"]);
+export const nodeStatusEnum = pgEnum("node_status", ["online", "offline", "maintenance", "pending"]);
 
 export const nodesTable = pgTable("nodes", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  location: text("location"),
   fqdn: text("fqdn").notNull(),
   scheme: nodeSchemeEnum("scheme").notNull().default("https"),
   daemonPort: integer("daemon_port").notNull().default(8080),
@@ -16,8 +17,10 @@ export const nodesTable = pgTable("nodes", {
   memoryOverallocate: integer("memory_overallocate").notNull().default(0),
   diskTotal: integer("disk_total").notNull(),
   diskOverallocate: integer("disk_overallocate").notNull().default(0),
-  status: nodeStatusEnum("status").notNull().default("offline"),
+  status: nodeStatusEnum("status").notNull().default("pending"),
   daemonToken: text("daemon_token"),
+  registrationToken: text("registration_token"),
+  notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

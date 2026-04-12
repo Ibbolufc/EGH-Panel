@@ -23,6 +23,7 @@ const statusConfig: Record<string, StatusConfig> = {
   install_failed:{ label: "Failed",        dotClass: "bg-red-400",       badgeClass: "bg-red-500/10 text-red-400 border-red-500/20" },
   failed:        { label: "Failed",        dotClass: "bg-red-400",       badgeClass: "bg-red-500/10 text-red-400 border-red-500/20" },
   maintenance:   { label: "Maintenance",   dotClass: "bg-orange-400",    badgeClass: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
+  pending:       { label: "Pending",       dotClass: "bg-amber-400",     badgeClass: "bg-amber-500/10 text-amber-400 border-amber-500/20", pulse: true },
   completed:     { label: "Completed",     dotClass: "bg-emerald-400",   badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
   created:       { label: "Created",       dotClass: "bg-slate-400",     badgeClass: "bg-slate-500/10 text-slate-400 border-slate-500/20" },
   deleted:       { label: "Deleted",       dotClass: "bg-slate-500",     badgeClass: "bg-slate-500/10 text-slate-400 border-slate-500/20" },

@@ -1,16 +1,32 @@
 import { Router } from "express";
 import { eq, count } from "drizzle-orm";
+import { randomBytes } from "crypto";
 import { db, nodesTable, allocationsTable, serversTable } from "@workspace/db";
 import { CreateNodeBody } from "@workspace/api-zod";
 import { requireAdmin } from "../lib/auth";
 
 const router: Router = Router();
 
+function generateRegistrationToken(): string {
+  return "reg_" + randomBytes(24).toString("hex");
+}
+
+function nodeWithMeta(node: any, serverCount = 0, allocationCount = 0) {
+  return {
+    ...node,
+    locationId: null,
+    locationName: null,
+    serverCount,
+    allocationCount,
+  };
+}
+
 router.get("/nodes", requireAdmin, async (req, res): Promise<void> => {
   const nodes = await db
     .select({
       id: nodesTable.id,
       name: nodesTable.name,
+      location: nodesTable.location,
       fqdn: nodesTable.fqdn,
       scheme: nodesTable.scheme,
       daemonPort: nodesTable.daemonPort,
@@ -20,22 +36,17 @@ router.get("/nodes", requireAdmin, async (req, res): Promise<void> => {
       diskTotal: nodesTable.diskTotal,
       diskOverallocate: nodesTable.diskOverallocate,
       status: nodesTable.status,
+      registrationToken: nodesTable.registrationToken,
+      notes: nodesTable.notes,
       createdAt: nodesTable.createdAt,
     })
     .from(nodesTable);
 
-  // Get counts
   const results = await Promise.all(
     nodes.map(async (node) => {
       const [serverCount] = await db.select({ count: count() }).from(serversTable).where(eq(serversTable.nodeId, node.id));
       const [allocCount] = await db.select({ count: count() }).from(allocationsTable).where(eq(allocationsTable.nodeId, node.id));
-      return {
-        ...node,
-        locationId: null,
-        locationName: null,
-        serverCount: Number(serverCount?.count ?? 0),
-        allocationCount: Number(allocCount?.count ?? 0),
-      };
+      return nodeWithMeta(node, Number(serverCount?.count ?? 0), Number(allocCount?.count ?? 0));
     })
   );
 
@@ -49,14 +60,24 @@ router.post("/nodes", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  const [node] = await db.insert(nodesTable).values(parsed.data).returning();
-  res.status(201).json({
-    ...node,
-    locationId: null,
-    locationName: null,
-    serverCount: 0,
-    allocationCount: 0,
-  });
+  // Accept extra fields not in generated zod schema
+  const extra: Record<string, any> = {};
+  if (req.body.location) extra.location = String(req.body.location);
+  if (req.body.notes) extra.notes = String(req.body.notes);
+
+  const registrationToken = generateRegistrationToken();
+
+  const [node] = await db
+    .insert(nodesTable)
+    .values({
+      ...parsed.data,
+      ...extra,
+      status: "pending",
+      registrationToken,
+    })
+    .returning();
+
+  res.status(201).json(nodeWithMeta(node));
 });
 
 router.get("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
@@ -69,15 +90,18 @@ router.get("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  const allocations = await db.select({
-    id: allocationsTable.id,
-    nodeId: allocationsTable.nodeId,
-    ip: allocationsTable.ip,
-    port: allocationsTable.port,
-    alias: allocationsTable.alias,
-    serverId: allocationsTable.serverId,
-    isAssigned: allocationsTable.serverId,
-  }).from(allocationsTable).where(eq(allocationsTable.nodeId, id));
+  const allocations = await db
+    .select({
+      id: allocationsTable.id,
+      nodeId: allocationsTable.nodeId,
+      ip: allocationsTable.ip,
+      port: allocationsTable.port,
+      alias: allocationsTable.alias,
+      serverId: allocationsTable.serverId,
+      isAssigned: allocationsTable.serverId,
+    })
+    .from(allocationsTable)
+    .where(eq(allocationsTable.nodeId, id));
 
   const [serverCount] = await db.select({ count: count() }).from(serversTable).where(eq(serversTable.nodeId, id));
 
@@ -99,18 +123,41 @@ router.patch("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
 
-  const parsed = CreateNodeBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
+  // Partial update — accept name, location, notes, fqdn, daemonPort, scheme, etc.
+  const allowedFields = ["name", "fqdn", "scheme", "daemonPort", "isPublic", "memoryTotal",
+    "memoryOverallocate", "diskTotal", "diskOverallocate", "status", "location", "notes"];
+  const patch: Record<string, any> = {};
+  for (const key of allowedFields) {
+    if (key in req.body) patch[key] = req.body[key];
   }
 
-  const [node] = await db.update(nodesTable).set(parsed.data).where(eq(nodesTable.id, id)).returning();
+  const [node] = await db.update(nodesTable).set(patch).where(eq(nodesTable.id, id)).returning();
   if (!node) {
     res.status(404).json({ error: "Node not found" });
     return;
   }
-  res.json({ ...node, locationId: null, locationName: null, serverCount: 0, allocationCount: 0 });
+  res.json(nodeWithMeta(node));
+});
+
+// Regenerate registration token — invalidates any pending install command
+router.post("/nodes/:id/regen-token", requireAdmin, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+
+  const newToken = generateRegistrationToken();
+
+  const [node] = await db
+    .update(nodesTable)
+    .set({ registrationToken: newToken, status: "pending" })
+    .where(eq(nodesTable.id, id))
+    .returning();
+
+  if (!node) {
+    res.status(404).json({ error: "Node not found" });
+    return;
+  }
+
+  res.json({ registrationToken: newToken, status: node.status });
 });
 
 router.delete("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
@@ -131,11 +178,7 @@ router.get("/nodes/:nodeId/allocations", requireAdmin, async (req, res): Promise
   const nodeId = parseInt(rawId, 10);
 
   const allocations = await db.select().from(allocationsTable).where(eq(allocationsTable.nodeId, nodeId));
-  res.json(allocations.map((a) => ({
-    ...a,
-    isAssigned: a.serverId != null,
-    serverName: null,
-  })));
+  res.json(allocations.map((a) => ({ ...a, isAssigned: a.serverId != null, serverName: null })));
 });
 
 router.post("/nodes/:nodeId/allocations", requireAdmin, async (req, res): Promise<void> => {
@@ -152,7 +195,6 @@ router.post("/nodes/:nodeId/allocations", requireAdmin, async (req, res): Promis
     ports.map((port) => ({ nodeId, ip, port, alias: alias ?? null }))
   ).returning();
 
-  // Return the first one for simplicity
   const first = inserted[0];
   res.status(201).json({ ...first, isAssigned: false, serverName: null });
 });
