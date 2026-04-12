@@ -99,6 +99,67 @@ COMPOSE_VER=$(docker compose version --short 2>/dev/null || echo "unknown")
 log "Docker ${DOCKER_VER}, Compose ${COMPOSE_VER} — OK"
 
 # =============================================================================
+# STEP 1b — Docker API compatibility check
+#
+# Some servers run an older Docker daemon (e.g. Docker 20 / API 1.41) while
+# the client binary shipped with a newer OS expects API 1.44+.  When they
+# mismatch, docker compose build fails with cryptic "server API too old"
+# errors.  We detect this here and silently enable compatibility mode so the
+# install continues without any manual exports.
+# =============================================================================
+
+_detect_docker_compat() {
+  # Try to get both API versions from "docker version".
+  # We use --format so we don't need jq.
+  local client_api server_api
+  client_api=$(docker version --format '{{.Client.APIVersion}}' 2>/dev/null || true)
+  server_api=$(docker version --format '{{.Server.APIVersion}}' 2>/dev/null || true)
+
+  # Strip whitespace/carriage-returns
+  client_api=$(echo "${client_api}" | tr -d '[:space:]')
+  server_api=$(echo "${server_api}" | tr -d '[:space:]')
+
+  # If either is empty, the daemon may be unreachable or version format changed.
+  if [[ -z "${client_api}" || -z "${server_api}" ]]; then
+    warn "Could not read Docker API versions — skipping compatibility check."
+    warn "If builds fail with 'server API too old', set these before re-running:"
+    warn "  export DOCKER_API_VERSION=1.41 DOCKER_BUILDKIT=0 COMPOSE_DOCKER_CLI_BUILD=0"
+    return
+  fi
+
+  log "Docker API — client: ${client_api}  daemon: ${server_api}"
+
+  # Compare as floating-point numbers using awk (handles 1.41, 1.44, etc.)
+  local needs_compat
+  needs_compat=$(awk -v c="${client_api}" -v s="${server_api}" \
+    'BEGIN { print (c + 0 > s + 0) ? "yes" : "no" }')
+
+  if [[ "${needs_compat}" == "yes" ]]; then
+    echo ""
+    echo -e "  ${YELLOW}${BOLD}Compatibility mode enabled${NC}"
+    echo -e "  ${DIM}Your Docker daemon speaks API ${server_api} but the client expects ${client_api}."
+    echo -e "  The installer will automatically limit the API version and disable"
+    echo -e "  BuildKit so the build works on this older daemon.${NC}"
+    echo ""
+
+    # Export for this process and all child processes (build, compose, etc.)
+    export DOCKER_API_VERSION="${server_api}"
+    export DOCKER_BUILDKIT=0
+    export COMPOSE_DOCKER_CLI_BUILD=0
+
+    ok "DOCKER_API_VERSION=${server_api}"
+    ok "DOCKER_BUILDKIT=0"
+    ok "COMPOSE_DOCKER_CLI_BUILD=0"
+    echo ""
+  else
+    # Client ≤ daemon — no mismatch; normal BuildKit path is fine.
+    : # nothing to do
+  fi
+}
+
+_detect_docker_compat
+
+# =============================================================================
 # STEP 2 — Clone or update the repository
 # =============================================================================
 if [[ -f "docker-compose.yml" && -f "scripts/install.sh" ]]; then

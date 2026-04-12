@@ -129,6 +129,30 @@ EGH_URL=http://203.0.113.10 EGH_PORT=8080 EGH_SEED=no EGH_NON_INTERACTIVE=1 \
 
 ---
 
+#### Older Docker daemon (API version mismatch)
+
+Some VPS providers ship an older Docker daemon (e.g. Docker 20 with API `1.41`) while the Docker client binary is newer (API `1.44+`). Without intervention, `docker compose build` fails with a cryptic **"server API too old"** or **"client version too new"** error.
+
+**You do not need to do anything.** The installer detects the mismatch automatically and enables compatibility mode before the build starts:
+
+```
+[egh] Docker API — client: 1.44  daemon: 1.41
+  ✓ Compatibility mode enabled
+  ✓ DOCKER_API_VERSION=1.41
+  ✓ DOCKER_BUILDKIT=0
+  ✓ COMPOSE_DOCKER_CLI_BUILD=0
+```
+
+If API version detection fails (e.g. the daemon socket is not reachable yet), the installer prints a warning with the exact `export` commands to run manually before re-running.
+
+To upgrade Docker to a fully modern version and avoid the mismatch entirely:
+
+```bash
+curl -fsSL https://get.docker.com | bash
+```
+
+---
+
 #### Existing reverse proxy / port 80 already in use
 
 If you already have Nginx, Caddy, or another web server on port 80, the installer will detect this and suggest a free alternative port (e.g. `8080`). Choose that port, then point your existing reverse proxy at `http://localhost:8080`. The installer also shows this if you dismiss the suggestion.
