@@ -622,6 +622,20 @@ log "Install summary saved → ${SUMMARY_FILE}"
 # =============================================================================
 # STEP 12 — Final summary
 # =============================================================================
+
+# Build the display URL: append :PORT when it is not the default for the scheme.
+# e.g.  http://203.0.113.10 + port 8080  →  http://203.0.113.10:8080
+#        http://panel.example.com + port 80  →  http://panel.example.com
+_PANEL_URL="${FRONTEND_URL}"
+if [[ "${HTTP_PORT}" -ne 80 && "${HTTP_PORT}" -ne 443 ]]; then
+  # Strip any stale :port the user may have typed in the URL, then append the real one
+  _PANEL_URL="$(echo "${FRONTEND_URL}" | sed -E 's|:[0-9]+$||'):${HTTP_PORT}"
+fi
+
+# The health-check command uses localhost + the actual port — always reachable
+# on the server regardless of whether DNS points at it yet.
+_HEALTHZ_CMD="curl http://localhost:${HTTP_PORT}/api/healthz"
+
 echo ""
 hr
 if [[ "${_ALL_OK}" == "true" ]]; then
@@ -631,10 +645,10 @@ else
 fi
 hr
 echo ""
-echo -e "  ${BOLD}Panel URL      ${NC}  ${FRONTEND_URL}"
+echo -e "  ${BOLD}Panel URL      ${NC}  ${_PANEL_URL}"
 echo -e "  ${BOLD}First run      ${NC}  Open the URL — you will be guided to create"
 echo -e "                    your administrator account."
-echo -e "  ${BOLD}Health check   ${NC}  curl ${FRONTEND_URL}/api/healthz"
+echo -e "  ${BOLD}Health check   ${NC}  ${_HEALTHZ_CMD}"
 echo ""
 
 if [[ "${_HEALTHY}" != "true" ]] || [[ "${_ALL_OK}" != "true" ]]; then
