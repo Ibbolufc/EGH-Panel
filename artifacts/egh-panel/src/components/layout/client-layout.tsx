@@ -1,27 +1,38 @@
 import { useState } from "react";
-import { Link, useLocation, useParams } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
   Server, Terminal, FolderOpen, Play, HardDrive, Clock, User, Home,
-  LogOut, Menu, X, ChevronRight
+  LogOut, Menu, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import EghLogo from "@/components/ui/logo";
 import { useListServers } from "@workspace/api-client-react";
 
 const mainNav = [
-  { href: "/client", icon: Home, label: "My Servers" },
+  { href: "/client",         icon: Home, label: "My Servers" },
   { href: "/client/account", icon: User, label: "Account" },
 ];
 
 const serverNav = [
-  { segment: "", icon: Server, label: "Overview" },
-  { segment: "/console", icon: Terminal, label: "Console" },
-  { segment: "/files", icon: FolderOpen, label: "Files" },
-  { segment: "/startup", icon: Play, label: "Startup" },
-  { segment: "/backups", icon: HardDrive, label: "Backups" },
-  { segment: "/schedules", icon: Clock, label: "Schedules" },
+  { segment: "",           icon: Server,      label: "Overview" },
+  { segment: "/console",   icon: Terminal,    label: "Console" },
+  { segment: "/files",     icon: FolderOpen,  label: "Files" },
+  { segment: "/startup",   icon: Play,        label: "Startup" },
+  { segment: "/backups",   icon: HardDrive,   label: "Backups" },
+  { segment: "/schedules", icon: Clock,       label: "Schedules" },
 ];
+
+const statusDotClass: Record<string, string> = {
+  running:    "bg-emerald-400 status-pulse",
+  online:     "bg-emerald-400 status-pulse",
+  starting:   "bg-sky-400 status-pulse",
+  stopping:   "bg-amber-400 status-pulse",
+  installing: "bg-yellow-400 status-pulse",
+  offline:    "bg-slate-500",
+  suspended:  "bg-red-400",
+  failed:     "bg-red-400",
+};
 
 interface ClientLayoutProps {
   children: React.ReactNode;
@@ -36,63 +47,69 @@ export function ClientLayout({ children, title }: ClientLayoutProps) {
   const { data: serversData } = useListServers();
   const servers = serversData?.data ?? [];
 
-  // Detect if we're on a server page
   const serverMatch = location.match(/^\/client\/servers\/(\d+)(.*)?$/);
   const currentServerId = serverMatch ? serverMatch[1] : null;
   const currentServer = servers.find((s) => String(s.id) === currentServerId);
+
+  const initials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-60 flex-col bg-[hsl(222,20%,8%)] border-r border-border transition-transform duration-200 lg:relative lg:flex lg:translate-x-0",
-          sidebarOpen ? "flex translate-x-0" : "-translate-x-full",
-          "flex flex-col"
+          "fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border/60 bg-[hsl(225,23%,6%)] transition-transform duration-200 lg:relative lg:flex lg:translate-x-0",
+          sidebarOpen ? "flex translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Logo */}
-        <div className="flex h-14 items-center gap-3 border-b border-border px-4">
+        {/* Logo area */}
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border/40 px-4">
           <EghLogo variant="compact" subtitle="Client" />
           <button
-            className="ml-auto lg:hidden text-muted-foreground hover:text-foreground"
+            className="ml-auto rounded-md p-1 text-muted-foreground hover:bg-white/5 hover:text-foreground lg:hidden"
             onClick={() => setSidebarOpen(false)}
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4">
+        <nav className="flex-1 overflow-y-auto py-3 space-y-4">
           {/* Main nav */}
-          <ul className="space-y-0.5 px-2 mb-4">
-            {mainNav.map((item) => {
-              const isActive = item.href === "/client"
-                ? location === "/client"
-                : location.startsWith(item.href);
-              return (
-                <li key={item.href}>
-                  <Link href={item.href}>
-                    <a className={cn(
-                      "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
-                    )}>
-                      <item.icon className="h-4 w-4 flex-shrink-0" />
-                      {item.label}
-                    </a>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="px-2">
+            <p className="section-label px-3 pb-2 pt-1">Menu</p>
+            <ul className="space-y-0.5">
+              {mainNav.map((item) => {
+                const isActive = item.href === "/client"
+                  ? location === "/client"
+                  : location.startsWith(item.href);
+                return (
+                  <li key={item.href}>
+                    <Link href={item.href}>
+                      <a className={cn(
+                        "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-white/4 hover:text-foreground"
+                      )}>
+                        {isActive && (
+                          <span className="absolute left-0 inset-y-1 w-0.5 rounded-r-full bg-primary" />
+                        )}
+                        <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                        {item.label}
+                      </a>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
 
-          {/* Server nav (when on a server page) */}
+          {/* Server sub-nav when on a server page */}
           {currentServerId && currentServer && (
             <div className="px-2">
-              <div className="px-3 py-1.5 mb-1">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Server</div>
-                <div className="text-sm font-medium text-foreground truncate mt-0.5">{currentServer.name}</div>
+              <div className="px-3 pb-2">
+                <p className="section-label pb-1">Current Server</p>
+                <p className="text-xs font-semibold text-foreground truncate">{currentServer.name}</p>
               </div>
               <ul className="space-y-0.5">
                 {serverNav.map((item) => {
@@ -104,12 +121,15 @@ export function ClientLayout({ children, title }: ClientLayoutProps) {
                     <li key={item.segment}>
                       <Link href={href}>
                         <a className={cn(
-                          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                          "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150",
                           isActive
                             ? "bg-primary/10 text-primary"
-                            : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                            : "text-muted-foreground hover:bg-white/4 hover:text-foreground"
                         )}>
-                          <item.icon className="h-4 w-4 flex-shrink-0" />
+                          {isActive && (
+                            <span className="absolute left-0 inset-y-1 w-0.5 rounded-r-full bg-primary" />
+                          )}
+                          <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
                           {item.label}
                         </a>
                       </Link>
@@ -120,85 +140,89 @@ export function ClientLayout({ children, title }: ClientLayoutProps) {
             </div>
           )}
 
-          {/* Servers list */}
+          {/* Server list */}
           {servers.length > 0 && (
-            <div className="px-2 mt-4">
-              <div className="px-3 py-1.5 mb-1">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Your Servers</div>
-              </div>
+            <div className="px-2">
+              <p className="section-label px-3 pb-2">Your Servers</p>
               <ul className="space-y-0.5">
-                {servers.slice(0, 5).map((server) => (
-                  <li key={server.id}>
-                    <Link href={`/client/servers/${server.id}`}>
-                      <a className={cn(
-                        "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-                        currentServerId === String(server.id)
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
-                      )}>
-                        <div className={cn(
-                          "h-1.5 w-1.5 rounded-full flex-shrink-0",
-                          server.status === "running" ? "bg-green-500" :
-                          server.status === "offline" ? "bg-gray-500" :
-                          server.status === "installing" ? "bg-yellow-500" : "bg-red-500"
-                        )} />
-                        <span className="truncate">{server.name}</span>
-                      </a>
-                    </Link>
-                  </li>
-                ))}
+                {servers.slice(0, 8).map((server) => {
+                  const dotClass = statusDotClass[server.status] ?? "bg-slate-500";
+                  const isSelected = currentServerId === String(server.id);
+                  return (
+                    <li key={server.id}>
+                      <Link href={`/client/servers/${server.id}`}>
+                        <a className={cn(
+                          "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-all duration-150",
+                          isSelected
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-white/4 hover:text-foreground"
+                        )}>
+                          {isSelected && (
+                            <span className="absolute left-0 inset-y-1 w-0.5 rounded-r-full bg-primary" />
+                          )}
+                          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotClass)} />
+                          <span className="truncate">{server.name}</span>
+                        </a>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
         </nav>
 
-        {/* User */}
-        <div className="border-t border-border p-3">
-          <div className="flex items-center gap-2 rounded-md px-2 py-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-bold">
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
+        {/* User section */}
+        <div className="shrink-0 border-t border-border/40 p-3 space-y-1">
+          <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-bold ring-1 ring-primary/30">
+              {initials}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-foreground truncate">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-xs font-semibold text-foreground leading-tight">
                 {user?.firstName} {user?.lastName}
               </div>
-              <div className="text-xs text-muted-foreground truncate">{user?.email}</div>
+              <div className="truncate text-[11px] text-muted-foreground leading-tight">{user?.email}</div>
             </div>
           </div>
           <button
             onClick={logout}
-            className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
+            className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
             data-testid="button-logout"
           >
-            <LogOut className="h-3.5 w-3.5" />
+            <LogOut className="h-3.5 w-3.5 shrink-0" />
             Sign out
           </button>
         </div>
       </aside>
 
-      {/* Overlay */}
+      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Main */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        <header className="flex h-14 items-center gap-4 border-b border-border bg-background/80 px-4 backdrop-blur-sm">
+      {/* Main content */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border/60 bg-background/95 px-5 backdrop-blur-sm">
           <button
-            className="lg:hidden text-muted-foreground hover:text-foreground"
+            className="rounded-md p-1 text-muted-foreground hover:bg-white/5 hover:text-foreground lg:hidden"
             onClick={() => setSidebarOpen(true)}
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="flex-1">
-            {title && <h1 className="text-sm font-semibold text-foreground">{title}</h1>}
+          <div className="flex-1 min-w-0">
+            {title && (
+              <h1 className="text-sm font-semibold text-foreground truncate">{title}</h1>
+            )}
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
-          {children}
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-6">
+            {children}
+          </div>
         </main>
       </div>
     </div>

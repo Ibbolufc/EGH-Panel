@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Shield, CheckCircle2 } from "lucide-react";
+import { Shield, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import EghLogo from "@/components/ui/logo";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -78,10 +78,13 @@ async function postSetup(values: Omit<FormValues, "confirmPassword">): Promise<S
 
 const passwordRequirements = [
   { label: "At least 12 characters", test: (v: string) => v.length >= 12 },
-  { label: "One lowercase letter", test: (v: string) => /[a-z]/.test(v) },
-  { label: "One uppercase letter", test: (v: string) => /[A-Z]/.test(v) },
-  { label: "One number", test: (v: string) => /[0-9]/.test(v) },
+  { label: "One lowercase letter",   test: (v: string) => /[a-z]/.test(v) },
+  { label: "One uppercase letter",   test: (v: string) => /[A-Z]/.test(v) },
+  { label: "One number",             test: (v: string) => /[0-9]/.test(v) },
 ];
+
+const inputClass = "h-10 bg-input/60 border-border/60 placeholder:text-muted-foreground/40 focus-visible:border-primary/60 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors";
+const labelClass = "text-xs font-medium text-muted-foreground uppercase tracking-wider";
 
 export default function Setup() {
   const [, setLocation] = useLocation();
@@ -127,21 +130,34 @@ export default function Setup() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-lg space-y-4">
-        <EghLogo subtitle="Initial Setup" />
+    <div className="relative min-h-screen flex flex-col items-center justify-center bg-background overflow-hidden py-10">
+      {/* Subtle background glow */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="h-[600px] w-[600px] rounded-full bg-primary/5 blur-[140px]" />
+      </div>
 
-        {/* Security notice */}
-        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
-          <Shield className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            This page is only shown once — it disappears automatically after
-            your administrator account is created.
-          </span>
+      <div className="relative w-full max-w-lg px-4 flex flex-col gap-6">
+        {/* Logo */}
+        <div className="flex justify-center">
+          <EghLogo subtitle="Initial Setup" />
         </div>
 
-        <Card className="border-border/50 shadow-2xl">
-          <CardContent className="pt-6">
+        {/* Security notice */}
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/25 bg-amber-500/8 px-4 py-3">
+          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+          <p className="text-xs text-amber-300/90 leading-relaxed">
+            This page is only shown once — it disappears automatically after your
+            administrator account is created. Keep your credentials safe.
+          </p>
+        </div>
+
+        <Card className="border-border/60 bg-card/80 shadow-2xl shadow-black/40 backdrop-blur-sm">
+          <CardContent className="px-6 py-7">
+            <div className="mb-6 space-y-1">
+              <h2 className="text-base font-semibold text-foreground">Create administrator account</h2>
+              <p className="text-xs text-muted-foreground">This account will have full control over the panel.</p>
+            </div>
+
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
@@ -154,15 +170,11 @@ export default function Setup() {
                     name="firstName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>First Name</FormLabel>
+                        <FormLabel className={labelClass}>First Name</FormLabel>
                         <FormControl>
-                          <Input
-                            placeholder="Jane"
-                            className="bg-muted/50"
-                            {...field}
-                          />
+                          <Input placeholder="Jane" className={inputClass} {...field} />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="text-xs" />
                       </FormItem>
                     )}
                   />
@@ -171,15 +183,11 @@ export default function Setup() {
                     name="lastName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Last Name</FormLabel>
+                        <FormLabel className={labelClass}>Last Name</FormLabel>
                         <FormControl>
-                          <Input
-                            placeholder="Doe"
-                            className="bg-muted/50"
-                            {...field}
-                          />
+                          <Input placeholder="Doe" className={inputClass} {...field} />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="text-xs" />
                       </FormItem>
                     )}
                   />
@@ -190,16 +198,16 @@ export default function Setup() {
                   name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Username</FormLabel>
+                      <FormLabel className={labelClass}>Username</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="janedoe"
-                          className="bg-muted/50"
+                          className={inputClass}
                           autoComplete="username"
                           {...field}
                         />
                       </FormControl>
-                      <FormMessage />
+                      <FormMessage className="text-xs" />
                     </FormItem>
                   )}
                 />
@@ -209,17 +217,17 @@ export default function Setup() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <FormLabel className={labelClass}>Email</FormLabel>
                       <FormControl>
                         <Input
                           type="email"
                           placeholder="admin@example.com"
-                          className="bg-muted/50"
+                          className={inputClass}
                           autoComplete="email"
                           {...field}
                         />
                       </FormControl>
-                      <FormMessage />
+                      <FormMessage className="text-xs" />
                     </FormItem>
                   )}
                 />
@@ -229,33 +237,36 @@ export default function Setup() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Password</FormLabel>
+                      <FormLabel className={labelClass}>Password</FormLabel>
                       <FormControl>
                         <Input
                           type="password"
                           placeholder="••••••••••••"
-                          className="bg-muted/50"
+                          className={inputClass}
                           autoComplete="new-password"
                           {...field}
                         />
                       </FormControl>
-                      <FormMessage />
-                      {/* Live requirements checklist */}
+                      <FormMessage className="text-xs" />
                       {watchedPassword.length > 0 && (
-                        <ul className="mt-2 space-y-1">
-                          {passwordRequirements.map(({ label, test }) => (
-                            <li
-                              key={label}
-                              className={`flex items-center gap-2 text-xs ${
-                                test(watchedPassword)
-                                  ? "text-emerald-400"
-                                  : "text-muted-foreground"
-                              }`}
-                            >
-                              <CheckCircle2 className="h-3 w-3 shrink-0" />
-                              {label}
-                            </li>
-                          ))}
+                        <ul className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5">
+                          {passwordRequirements.map(({ label, test }) => {
+                            const ok = test(watchedPassword);
+                            return (
+                              <li
+                                key={label}
+                                className={`flex items-center gap-1.5 text-[11px] transition-colors ${
+                                  ok ? "text-emerald-400" : "text-muted-foreground/60"
+                                }`}
+                              >
+                                {ok
+                                  ? <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                  : <Circle className="h-3 w-3 shrink-0" />
+                                }
+                                {label}
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
                     </FormItem>
@@ -267,37 +278,44 @@ export default function Setup() {
                   name="confirmPassword"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Confirm Password</FormLabel>
+                      <FormLabel className={labelClass}>Confirm Password</FormLabel>
                       <FormControl>
                         <Input
                           type="password"
                           placeholder="••••••••••••"
-                          className="bg-muted/50"
+                          className={inputClass}
                           autoComplete="new-password"
                           {...field}
                         />
                       </FormControl>
-                      <FormMessage />
+                      <FormMessage className="text-xs" />
                     </FormItem>
                   )}
                 />
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={setupMutation.isPending}
-                >
-                  {setupMutation.isPending
-                    ? "Creating account..."
-                    : "Create Administrator Account"}
-                </Button>
+                <div className="pt-1">
+                  <Button
+                    type="submit"
+                    className="w-full h-10 font-semibold"
+                    disabled={setupMutation.isPending}
+                  >
+                    {setupMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Creating account…
+                      </>
+                    ) : (
+                      "Create Administrator Account"
+                    )}
+                  </Button>
+                </div>
               </form>
             </Form>
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs text-muted-foreground">
-          EGH Panel · Easy Game Host
+        <p className="text-center text-[11px] text-muted-foreground/40 select-none">
+          EGH Panel &middot; Easy Game Host
         </p>
       </div>
     </div>

@@ -69,52 +69,52 @@
   --elevate-2: rgba(255,255,255, .09);
 
   /* Deep dark slate background */
-  --background: 225 21% 7%;
-  --foreground: 210 40% 98%;
+  --background: 224 22% 7%;
+  --foreground: 213 31% 94%;
 
-  --border: 217 19% 20%;
+  --border: 217 18% 18%;
 
-  /* Card style */
-  --card: 222 20% 10%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 217 19% 15%;
+  /* Card — slightly elevated above page bg */
+  --card: 222 20% 9%;
+  --card-foreground: 213 31% 94%;
+  --card-border: 217 18% 16%;
 
-  /* Sidebar */
-  --sidebar: 225 21% 6%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217 19% 15%;
+  /* Sidebar — slightly deeper than the main bg */
+  --sidebar: 225 23% 6%;
+  --sidebar-foreground: 213 31% 94%;
+  --sidebar-border: 217 18% 14%;
   --sidebar-primary: 214 91% 64%;
-  --sidebar-primary-foreground: 210 40% 98%;
-  --sidebar-accent: 217 19% 15%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 217 19% 27%;
+  --sidebar-primary-foreground: 213 31% 94%;
+  --sidebar-accent: 217 18% 14%;
+  --sidebar-accent-foreground: 213 31% 94%;
+  --sidebar-ring: 217 18% 27%;
 
-  --popover: 222 20% 10%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217 19% 15%;
+  --popover: 222 20% 9%;
+  --popover-foreground: 213 31% 94%;
+  --popover-border: 217 18% 16%;
 
   /* Vivid electric blue */
   --primary: 214 91% 64%;
   --primary-foreground: 210 40% 98%;
 
-  --secondary: 217 19% 20%;
-  --secondary-foreground: 210 40% 98%;
+  --secondary: 217 18% 18%;
+  --secondary-foreground: 213 31% 94%;
 
-  --muted: 217 19% 15%;
-  --muted-foreground: 215 20.2% 65.1%;
+  --muted: 217 18% 14%;
+  --muted-foreground: 215 18% 54%;
 
-  --accent: 217 19% 15%;
-  --accent-foreground: 210 40% 98%;
+  --accent: 217 18% 14%;
+  --accent-foreground: 213 31% 94%;
 
-  --destructive: 0 84% 60%;
+  --destructive: 0 72% 55%;
   --destructive-foreground: 210 40% 98%;
 
-  --input: 217 19% 20%;
+  --input: 217 18% 16%;
   --ring: 214 91% 64%;
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-mono: 'JetBrains Mono', 'Menlo', monospace;
-  --radius: 0.375rem;
+  --radius: 0.5rem;
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
@@ -136,5 +136,26 @@
   }
   html {
     color-scheme: dark;
+  }
+}
+
+@layer utilities {
+  /* Subtle animated pulse for live status indicators */
+  @keyframes status-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .status-pulse {
+    animation: status-pulse 2s ease-in-out infinite;
+  }
+
+  /* Panel section header style */
+  .section-label {
+    @apply text-[10px] font-semibold uppercase tracking-widest text-muted-foreground;
+  }
+
+  /* Stat card top-accent bar */
+  .stat-card-accent {
+    @apply absolute inset-x-0 top-0 h-0.5 rounded-t-xl;
   }
 }
