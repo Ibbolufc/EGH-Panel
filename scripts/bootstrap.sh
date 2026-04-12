@@ -623,13 +623,19 @@ log "Install summary saved → ${SUMMARY_FILE}"
 # STEP 12 — Final summary
 # =============================================================================
 
-# Build the display URL: append :PORT when it is not the default for the scheme.
-# e.g.  http://203.0.113.10 + port 8080  →  http://203.0.113.10:8080
-#        http://panel.example.com + port 80  →  http://panel.example.com
-_PANEL_URL="${FRONTEND_URL}"
+# Build the display URL: ensure a scheme is present, then append :PORT when it
+# is not the default for the scheme.
+# e.g.  203.0.113.10 + port 8095        →  http://203.0.113.10:8095
+#        http://203.0.113.10 + port 8095 →  http://203.0.113.10:8095
+#        http://panel.example.com + 80   →  http://panel.example.com
+_BASE_URL="${FRONTEND_URL}"
+if [[ ! "${_BASE_URL}" =~ ^https?:// ]]; then
+  _BASE_URL="http://${_BASE_URL}"
+fi
+_PANEL_URL="${_BASE_URL}"
 if [[ "${HTTP_PORT}" -ne 80 && "${HTTP_PORT}" -ne 443 ]]; then
-  # Strip any stale :port the user may have typed in the URL, then append the real one
-  _PANEL_URL="$(echo "${FRONTEND_URL}" | sed -E 's|:[0-9]+$||'):${HTTP_PORT}"
+  # Strip any stale :port the user may have typed, then append the real one
+  _PANEL_URL="$(echo "${_BASE_URL}" | sed -E 's|:[0-9]+$||'):${HTTP_PORT}"
 fi
 
 # The health-check command uses localhost + the actual port — always reachable
