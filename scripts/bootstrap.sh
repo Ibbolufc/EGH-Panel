@@ -281,7 +281,12 @@ fi
 # Check for running containers from this compose project
 _RUNNING_COUNT=0
 if [[ -f "docker-compose.yml" ]]; then
-  _RUNNING_COUNT=$(docker compose ps --status running 2>/dev/null | grep -cE 'api|frontend|postgres|redis|nginx' || echo "0")
+  # grep -c always prints the count (even "0") and exits 1 when nothing matches.
+  # Using || true suppresses that exit code without doubling the output the way
+  # || echo "0" would (which produced "0\n0" and broke the -gt comparison).
+  _RUNNING_COUNT=$(docker compose ps --status running 2>/dev/null \
+    | grep -cE 'api|frontend|postgres|redis|nginx' || true)
+  _RUNNING_COUNT="${_RUNNING_COUNT:-0}"
 fi
 
 if [[ "${EXISTING_INSTALL}" == "yes" || "${_RUNNING_COUNT}" -gt 0 ]]; then
