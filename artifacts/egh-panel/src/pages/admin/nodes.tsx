@@ -34,7 +34,7 @@ function generateInstallScript(opts: {
 
   return `#!/usr/bin/env bash
 # ============================================================
-#  EGH Panel — Wings auto-install
+#  EGH Panel — EGH Node auto-install
 #  Node: ${nodeName} (ID: ${nodeId})
 #  Run as root on the target machine. Do NOT run on your panel.
 # ============================================================
@@ -43,7 +43,7 @@ set -euo pipefail
 EGH_PANEL_URL="${panelUrl}"
 EGH_NODE_TOKEN="${registrationToken}"
 EGH_NODE_FQDN="${nodeFqdn}"
-EGH_WINGS_PORT="${daemonPort}"
+EGH_NODE_PORT="${daemonPort}"
 
 # ── 1. Root check ──────────────────────────────────────────
 if [ "$(id -u)" -ne 0 ]; then
@@ -65,21 +65,21 @@ else
   echo "  Docker already present."
 fi
 
-# ── 3. Download Wings binary ───────────────────────────────
-echo "[3/5] Downloading Wings daemon..."
-mkdir -p /etc/pterodactyl /var/log/wings
+# ── 3. Download EGH Node agent ─────────────────────────────
+echo "[3/5] Downloading EGH Node agent..."
+mkdir -p /etc/pterodactyl /var/log/egh-node
 curl -fsSL \\
   "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64" \\
-  -o /usr/local/bin/wings
-chmod +x /usr/local/bin/wings
+  -o /usr/local/bin/egh-node
+chmod +x /usr/local/bin/egh-node
 
-# ── 4. Write Wings config ──────────────────────────────────
-echo "[4/5] Writing Wings configuration..."
-cat > /etc/pterodactyl/config.yml << WINGSCONF
+# ── 4. Write EGH Node config ───────────────────────────────
+echo "[4/5] Writing EGH Node configuration..."
+cat > /etc/pterodactyl/config.yml << NODECONF
 debug: false
 api:
   host: "0.0.0.0"
-  port: \${EGH_WINGS_PORT}
+  port: \${EGH_NODE_PORT}
   ssl:
     enabled: false
   upload_limit: 100
@@ -91,13 +91,13 @@ remote: "\${EGH_PANEL_URL}"
 token: "\${EGH_NODE_TOKEN}"
 allowed_origins:
   - "\${EGH_PANEL_URL}"
-WINGSCONF
+NODECONF
 
-# ── 5. Install & start Wings service ──────────────────────
-echo "[5/5] Installing Wings systemd service..."
-cat > /etc/systemd/system/wings.service << 'SVCEOF'
+# ── 5. Install & start EGH Node service ───────────────────
+echo "[5/5] Installing EGH Node service..."
+cat > /etc/systemd/system/egh-node.service << 'SVCEOF'
 [Unit]
-Description=EGH Panel Wings Daemon
+Description=EGH Node Agent
 After=docker.service
 Requires=docker.service
 
@@ -105,24 +105,24 @@ Requires=docker.service
 User=root
 WorkingDirectory=/etc/pterodactyl
 LimitNOFILE=4096
-PIDFile=/var/run/wings/daemon.pid
-ExecStart=/usr/local/bin/wings
+PIDFile=/var/run/egh-node/daemon.pid
+ExecStart=/usr/local/bin/egh-node
 Restart=on-failure
 StartLimitInterval=600
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=wings
+SyslogIdentifier=egh-node
 
 [Install]
 WantedBy=multi-user.target
 SVCEOF
 
 systemctl daemon-reload
-systemctl enable --now wings
+systemctl enable --now egh-node
 
 echo ""
 echo "============================================================"
-echo " Wings installed and started."
+echo " EGH Node installed and started."
 echo " Node ${nodeName} will appear Online in EGH Panel once it"
 echo " connects to: \${EGH_PANEL_URL}"
 echo "============================================================"
@@ -217,7 +217,7 @@ function InstallCommandModal({
               <Download className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-foreground">Wings Install Command</h3>
+              <h3 className="text-base font-semibold text-foreground">EGH Node Install</h3>
               <p className="text-xs text-muted-foreground">{node.name} · {node.fqdn}</p>
             </div>
           </div>
@@ -241,7 +241,7 @@ function InstallCommandModal({
               <CopyButton text={script} label="Copy full script" />
             </div>
             <p className="text-xs text-muted-foreground">
-              Paste and run this complete script as root on your node. It installs Docker (if missing), downloads Wings, writes the configuration, and starts the service.
+              Paste and run this complete script as root on your node. It installs Docker (if missing), downloads EGH Node, writes the configuration, and starts the agent service.
             </p>
             <div className="relative overflow-hidden rounded-lg border border-border/40 bg-[hsl(225,20%,4%)]">
               <div className="flex items-center justify-between border-b border-border/30 px-3 py-2">
@@ -251,7 +251,7 @@ function InstallCommandModal({
                     <span className="h-2.5 w-2.5 rounded-full bg-amber-500/60" />
                     <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/60" />
                   </div>
-                  <span className="text-[10px] text-muted-foreground/50 font-mono">install-wings.sh</span>
+                  <span className="text-[10px] text-muted-foreground/50 font-mono">install-egh-node.sh</span>
                 </div>
                 <CopyButton text={script} size="xs" />
               </div>
@@ -281,16 +281,16 @@ function InstallCommandModal({
                     code: "curl -fsSL https://get.docker.com | bash && systemctl enable --now docker",
                   },
                   {
-                    n: "2", title: "Download Wings binary",
-                    code: "mkdir -p /etc/pterodactyl\ncurl -fsSL https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64 -o /usr/local/bin/wings\nchmod +x /usr/local/bin/wings",
+                    n: "2", title: "Download EGH Node agent",
+                    code: "mkdir -p /etc/pterodactyl\ncurl -fsSL https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64 -o /usr/local/bin/egh-node\nchmod +x /usr/local/bin/egh-node",
                   },
                   {
-                    n: "3", title: "Write Wings config",
+                    n: "3", title: "Write EGH Node config",
                     note: `Create /etc/pterodactyl/config.yml with remote: "${panelUrl}" and token: "${node.registrationToken}"`,
                   },
                   {
-                    n: "4", title: "Start Wings",
-                    code: "systemctl enable --now wings",
+                    n: "4", title: "Start EGH Node",
+                    code: "systemctl enable --now egh-node",
                   },
                 ].map(step => (
                   <div key={step.n} className="flex gap-3">
@@ -351,9 +351,9 @@ function InstallCommandModal({
             {showTrouble && (
               <div className="border-t border-border/40 px-4 py-4 space-y-3 bg-white/2">
                 {[
-                  { q: "Wings is running but the node stays Offline", a: "Ensure port " + node.daemonPort + " is open in your firewall (ufw allow " + node.daemonPort + "/tcp). Check wings logs: journalctl -u wings -f" },
+                  { q: "EGH Node is running but the node stays Offline", a: "Ensure port " + node.daemonPort + " is open in your firewall (ufw allow " + node.daemonPort + "/tcp). Check agent logs: journalctl -u egh-node -f" },
                   { q: "Certificate errors with HTTPS", a: "Your FQDN must have a valid SSL certificate. Use Let's Encrypt: certbot certonly --standalone -d " + node.fqdn },
-                  { q: "Wings crashes on start", a: "Check logs with: journalctl -u wings --no-pager -n 50. Common cause is Docker not running (systemctl start docker)." },
+                  { q: "EGH Node crashes on start", a: "Check logs with: journalctl -u egh-node --no-pager -n 50. Common cause is Docker not running (systemctl start docker)." },
                   { q: "Need to change the token", a: "Click 'Regenerate Token' below and re-run the install script on the node. The old token will no longer work." },
                 ].map(item => (
                   <div key={item.q}>
@@ -421,7 +421,7 @@ function AddNodeModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
               <CheckCircle2 className="h-5 w-5 text-emerald-400" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-foreground">Node registered — install Wings to connect it</h3>
+              <h3 className="text-base font-semibold text-foreground">Node registered — install EGH Node to connect it</h3>
               <p className="text-xs text-muted-foreground">{createdNode.name} · Status: <span className="text-amber-400">Pending</span></p>
             </div>
           </div>
@@ -430,9 +430,9 @@ function AddNodeModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
             {/* Progress indicator */}
             <div className="flex items-center gap-2">
               {[
-                { label: "Node registered",   done: true },
-                { label: "Install Wings",      done: false, active: true },
-                { label: "Node online",        done: false },
+                { label: "Node registered",      done: true },
+                { label: "Install EGH Node",   done: false, active: true },
+                { label: "Node online",          done: false },
               ].map((s, i) => (
                 <div key={s.label} className="flex items-center gap-2 flex-1">
                   <div className={cn(
@@ -470,7 +470,7 @@ function AddNodeModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
       <div className="w-full max-w-lg rounded-xl border border-border/60 bg-card shadow-2xl my-6">
         <div className="border-b border-border/40 p-5">
           <h3 className="text-base font-semibold text-foreground">Add Node</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">Register a new node. After saving, you'll receive a Wings install command.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Register a new node. After saving, you'll receive an EGH Node install command.</p>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -588,7 +588,7 @@ function InstallCommandContent({ node }: { node: any }) {
               <span className="h-2 w-2 rounded-full bg-emerald-500/50" />
             </div>
             <Terminal className="h-3 w-3 text-muted-foreground/40" />
-            <span className="text-[10px] text-muted-foreground/50 font-mono">install-wings.sh — {node.name}</span>
+            <span className="text-[10px] text-muted-foreground/50 font-mono">install-egh-node.sh — {node.name}</span>
           </div>
           <button
             onClick={handleCopy}
@@ -609,7 +609,7 @@ function InstallCommandContent({ node }: { node: any }) {
       </div>
 
       <p className="text-xs text-muted-foreground/60 text-center">
-        This node will show as <span className="text-emerald-400 font-medium">Online</span> in the panel once Wings connects successfully.
+        This node will show as <span className="text-emerald-400 font-medium">Online</span> in the panel once EGH Node connects successfully.
       </p>
     </div>
   );
@@ -668,7 +668,7 @@ export default function AdminNodes() {
                   {nodes.length} node{nodes.length !== 1 ? "s" : ""} registered
                   {pendingCount > 0 && (
                     <span className="ml-2 inline-flex items-center gap-1 rounded-md bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-[11px] text-amber-400 font-medium">
-                      <Clock className="h-3 w-3" /> {pendingCount} pending Wings install
+                      <Clock className="h-3 w-3" /> {pendingCount} pending EGH Node install
                     </span>
                   )}
                 </>
@@ -718,9 +718,9 @@ export default function AdminNodes() {
               <ol className="space-y-4">
                 {[
                   { n: "1", title: "Provision a Linux server", desc: "Any VPS or dedicated machine. Ubuntu 22.04+ with 2+ vCPUs and 2+ GB RAM recommended." },
-                  { n: "2", title: "Click \"Add Node\" above", desc: "Enter the name, FQDN or IP, and resource limits. EGH Panel will generate a Wings install command for you." },
-                  { n: "3", title: "Run the install command on your node", desc: "SSH into the machine and paste the generated script as root. It installs Docker, Wings, and links the node to this panel." },
-                  { n: "4", title: "Node goes Online automatically", desc: "Once Wings connects back to the panel, the node status will change from Pending to Online." },
+                  { n: "2", title: "Click \"Add Node\" above", desc: "Enter the name, FQDN or IP, and resource limits. EGH Panel will generate an EGH Node install command for you." },
+                  { n: "3", title: "Run the install command on your node", desc: "SSH into the machine and paste the generated script as root. It installs Docker, EGH Node, and links the node to this panel." },
+                  { n: "4", title: "Node goes Online automatically", desc: "Once EGH Node connects back to the panel, the node status will change from Pending to Online." },
                 ].map((step) => (
                   <li key={step.n} className="flex gap-3">
                     <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/60 bg-white/5 text-xs font-bold text-muted-foreground mt-0.5">
@@ -748,7 +748,7 @@ export default function AdminNodes() {
               <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">What is a node?</p>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  A node is a physical or virtual server running the Wings daemon. EGH Panel connects to Wings to deploy and manage game server containers on that machine.
+                  A node is a physical or virtual server running the EGH Node agent. EGH Panel connects to EGH Node to deploy and manage game server containers on that machine.
                 </p>
               </div>
               <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
@@ -818,8 +818,8 @@ export default function AdminNodes() {
                     <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/8 px-3 py-2.5 flex items-center gap-3">
                       <Clock className="h-4 w-4 text-amber-400 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-amber-300">Awaiting Wings installation</p>
-                        <p className="text-[11px] text-amber-400/60">Run the install command on this machine to bring it online.</p>
+                        <p className="text-xs font-medium text-amber-300">Awaiting EGH Node installation</p>
+                        <p className="text-[11px] text-amber-400/60">Run the EGH Node install command on this machine to bring it online.</p>
                       </div>
                       <button
                         onClick={() => setInstallNode(node)}
