@@ -632,7 +632,7 @@ export default function AdminNodes() {
   const [showCreate, setShowCreate] = useState(false);
   const [installNode, setInstallNode] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const { data, isLoading, refetch } = useListNodes();
+  const { data, isLoading, refetch } = useListNodes({ query: { refetchInterval: 30_000 } });
   const deleteNode = useDeleteNode();
   const { toast } = useToast();
 
