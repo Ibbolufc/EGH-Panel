@@ -45,8 +45,8 @@ EGH_PANEL_URL="${panelUrl}"
 EGH_NODE_TOKEN="${registrationToken}"
 EGH_NODE_FQDN="${nodeFqdn}"
 EGH_NODE_PORT="${daemonPort}"
-EGH_CONFIG_DIR="/etc/pterodactyl"
-EGH_DATA_DIR="/var/lib/pterodactyl/volumes"
+EGH_CONFIG_DIR="/etc/egh-node"
+EGH_DATA_DIR="/var/lib/egh-node/volumes"
 EGH_AGENT_URL="${panelUrl}/api/download/egh-node"
 
 # ── 1. Root check ──────────────────────────────────────────
