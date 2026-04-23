@@ -218,7 +218,10 @@ router.post("/nodes/:id/test-connection", requireAdmin, async (req, res): Promis
 });
 
 // Heartbeat — called by the EGH Node agent; no admin session required
-// Auth: Bearer <registrationToken> in Authorization header
+// Auth: Bearer <registrationToken | daemonToken> in Authorization header
+// On the first heartbeat (registrationToken, no daemonToken yet) a long-lived
+// daemonToken is generated, stored, and returned so the agent can switch to it
+// for all future heartbeats.  Both tokens are accepted for backwards compat.
 router.post("/nodes/:id/heartbeat", async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
@@ -237,16 +240,41 @@ router.post("/nodes/:id/heartbeat", async (req, res): Promise<void> => {
     return;
   }
 
-  if (!node.registrationToken || node.registrationToken !== token) {
-    res.status(403).json({ error: "Invalid registration token" });
+  const matchesRegistration = node.registrationToken && node.registrationToken === token;
+  const matchesDaemon = node.daemonToken && node.daemonToken === token;
+
+  if (!matchesRegistration && !matchesDaemon) {
+    res.status(403).json({ error: "Invalid token" });
     return;
   }
 
   const now = new Date();
+
+  // First heartbeat: generate a long-lived daemonToken and return it so the
+  // agent can switch away from the one-time registrationToken.
+  if (!node.daemonToken) {
+    const daemonToken = "daemon_" + randomBytes(32).toString("hex");
+    await db
+      .update(nodesTable)
+      .set({ status: "online", daemonToken, lastHeartbeatAt: now, updatedAt: now })
+      .where(eq(nodesTable.id, id));
+    res.json({ ok: true, status: "online", daemonToken });
+    return;
+  }
+
+  // Subsequent heartbeats: just update the timestamp/status.
+  // If the agent is still using the registrationToken, include the daemonToken
+  // in the response again so it can make the switch.
   await db
     .update(nodesTable)
     .set({ status: "online", lastHeartbeatAt: now, updatedAt: now })
     .where(eq(nodesTable.id, id));
+
+  if (matchesRegistration) {
+    // Remind the agent to switch to the daemonToken
+    res.json({ ok: true, status: "online", daemonToken: node.daemonToken });
+    return;
+  }
 
   res.json({ ok: true, status: "online" });
 });
@@ -300,12 +328,6 @@ router.delete("/allocations/:id", requireAdmin, async (req, res): Promise<void> 
     return;
   }
   res.sendStatus(204);
-});
-
-router.get("/download/egh-node", (_req, res): void => {
-  const arch = ((_req.query.arch as string) || "amd64").replace(/[^a-z0-9_]/g, "");
-  const segments = ["pterodactyl", "wings", `releases/latest/download/wings_linux_${arch}`];
-  res.redirect(302, `https://github.com/${segments[0]}/${segments[1]}/${segments[2]}`);
 });
 
 export default router;
