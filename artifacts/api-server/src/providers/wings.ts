@@ -28,6 +28,25 @@ import { ProviderError } from "./types";
 
 const REQUEST_TIMEOUT_MS = 12_000;
 
+/**
+ * Create a short-lived HS256 JWT for authenticating against a Wings daemon.
+ * Used both by WingsProvider HTTP requests and the console WebSocket proxy.
+ * Throws if the node has no daemonToken set.
+ */
+export function makeWingsToken(node: ProviderNode): string {
+  if (!node.daemonToken) {
+    throw new Error(
+      "Node has no authentication token configured — cannot communicate with daemon",
+    );
+  }
+  const now = Math.floor(Date.now() / 1000);
+  return jwt.sign(
+    { jti: randomUUID(), iat: now, nbf: now - 5, exp: now + 300 },
+    node.daemonToken,
+    { algorithm: "HS256" },
+  );
+}
+
 export class WingsProvider implements INodeProvider {
   readonly name = "wings";
 
@@ -36,24 +55,15 @@ export class WingsProvider implements INodeProvider {
   }
 
   private makeToken(node: ProviderNode): string {
-    if (!node.daemonToken) {
+    try {
+      return makeWingsToken(node);
+    } catch (err) {
       throw new ProviderError(
-        "Node has no authentication token configured — cannot communicate with daemon",
+        err instanceof Error ? err.message : "Token creation failed",
         "NO_DAEMON_TOKEN",
         500,
       );
     }
-    const now = Math.floor(Date.now() / 1000);
-    return jwt.sign(
-      {
-        jti: randomUUID(),
-        iat: now,
-        nbf: now - 5,
-        exp: now + 300,
-      },
-      node.daemonToken,
-      { algorithm: "HS256" },
-    );
   }
 
   private async request<T = unknown>(
