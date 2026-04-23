@@ -245,14 +245,4 @@ router.delete("/allocations/:id", requireAdmin, async (req, res): Promise<void> 
   res.sendStatus(204);
 });
 
-router.get("/download/egh-node", (_req, res): void => {
-  const arch = (_req.query.arch as string) || "amd64";
-  const parts = [
-    "https://github.com/",
-    "pterodactyl/wings/",
-    `releases/latest/download/wings_linux_${arch}`,
-  ];
-  res.redirect(302, parts.join(""));
-});
-
 export default router;
