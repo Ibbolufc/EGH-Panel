@@ -133,11 +133,17 @@ export interface ProviderServer {
   memoryLimit: number;
   diskLimit: number;
   cpuLimit: number;
-  /** Primary allocation details for the daemon provisioning payload */
-  allocationIp: string;
-  allocationPort: number;
-  /** Current environment variable values (envVar name → value) */
-  environment: Record<string, string>;
+  /**
+   * Primary allocation details — required for provisionServer().
+   * Optional elsewhere (power actions, file ops, etc. don't need it).
+   */
+  allocationIp?: string;
+  allocationPort?: number;
+  /**
+   * Environment variable values (envVar → value) — required for provisionServer().
+   * Optional elsewhere.
+   */
+  environment?: Record<string, string>;
 }
 
 export class ProviderError extends Error {

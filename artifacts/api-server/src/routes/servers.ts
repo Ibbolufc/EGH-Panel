@@ -65,7 +65,7 @@ router.post("/servers", requireAdmin, validateBody(CreateServerBody), asyncHandl
 
   const [egg] = await db.select().from(eggsTable).where(eq(eggsTable.id, serverData.eggId));
 
-  let [server] = await db.insert(serversTable).values({
+  const [server] = await db.insert(serversTable).values({
     ...serverData,
     status: "installing",
     startup: serverData.startup ?? egg?.startup,
@@ -94,18 +94,14 @@ router.post("/servers", requireAdmin, validateBody(CreateServerBody), asyncHandl
   });
 
   // Best-effort: send full server config to the daemon and trigger install.
-  // Non-fatal — if the node is offline the server stays "installing" and the
-  // admin can retry via a reinstall action later.
+  // Wings install is async — status stays "installing" until the daemon
+  // signals completion.  Non-fatal if node is offline; admin can retry later.
   try {
     const { providerServer } = await buildProviderServer(server.id);
     await getProviderForNode(providerServer.node).provisionServer(providerServer);
-    [server] = await db
-      .update(serversTable)
-      .set({ status: "offline" })
-      .where(eq(serversTable.id, server.id))
-      .returning();
-  } catch {
-    // Daemon unreachable or node not configured yet — leave status as "installing"
+  } catch (err) {
+    // Daemon unreachable or node not configured yet — server stays "installing"
+    console.warn(`[servers] Daemon provisioning failed for server ${server.id}: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   res.status(201).json(await formatServer(server));
@@ -176,8 +172,9 @@ router.delete("/servers/:id", requireAdmin, asyncHandler(async (req, res) => {
   try {
     const { providerServer } = await buildProviderServer(id);
     await getProviderForNode(providerServer.node).deleteServer(providerServer);
-  } catch {
+  } catch (err) {
     // Daemon offline, node not configured, or server was never provisioned
+    console.warn(`[servers] Daemon delete failed for server ${id}: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   await db.delete(serversTable).where(eq(serversTable.id, id));

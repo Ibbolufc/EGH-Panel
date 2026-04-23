@@ -287,12 +287,13 @@ export class WingsProvider implements INodeProvider {
   }
 
   async provisionServer(server: ProviderServer): Promise<void> {
+    const env = server.environment ?? {};
     const payload = {
       uuid: server.uuid,
       settings: {
         uuid: server.uuid,
         suspended: false,
-        environment: server.environment,
+        environment: env,
         invocation: server.startup ?? "",
         skip_egg_scripts: false,
         build: {
@@ -307,14 +308,14 @@ export class WingsProvider implements INodeProvider {
         container: {
           image: server.dockerImage ?? "ghcr.io/pterodactyl/yolks:debian",
           timezone: "UTC",
-          env: server.environment,
+          env,
           requires_rebuild: false,
         },
         allocations: {
           force_outgoing_ip: false,
           default: {
-            ip: server.allocationIp,
-            port: server.allocationPort,
+            ip: server.allocationIp ?? "0.0.0.0",
+            port: server.allocationPort ?? 0,
           },
           mappings: {},
         },
