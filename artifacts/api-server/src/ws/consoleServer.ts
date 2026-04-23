@@ -1,22 +1,14 @@
 /**
  * WebSocket Console Server
  *
- * Provides real-time console output, power state changes, and stats
- * for server control. Each connection is authenticated via JWT query param.
- *
  * Client connects to: ws://HOST/ws?token=JWT&serverId=N
  *
- * Outgoing message format:
- *   { type: "console" | "status" | "stats" | "auth_error" | "not_found", data: string | object }
+ * Outgoing:  { type: "console"|"status"|"stats"|"auth_error"|"not_found", data: ... }
+ * Incoming:  { event: "send_command"|"set_state", args: [...] }
  *
- * Incoming message format:
- *   { event: "send_command", args: ["say hello"] }
- *   { event: "set_state", args: ["start"] }
- *
- * When the node uses WingsProvider, the API server opens a server-side
- * WebSocket to the daemon (`wss://{fqdn}:{port}/api/servers/{uuid}/ws`)
- * and proxies messages bidirectionally.  For MockProvider nodes the
- * existing in-memory log polling is used as a fallback.
+ * For WingsProvider nodes a server-side WebSocket is opened to the daemon and
+ * messages are proxied bidirectionally.  MockProvider nodes use the existing
+ * in-memory log polling as a fallback.
  */
 
 import { WebSocketServer, WebSocket } from "ws";
@@ -31,6 +23,11 @@ import type { ProviderNode, ProviderServer } from "../providers/types";
 import { logger } from "../lib/logger";
 import { mockProvider } from "../providers/mock";
 
+// TLS cert verification for daemon WSS connections.
+// Default: enabled (secure).  Set EGH_DAEMON_TLS_VERIFY=false only for nodes
+// that use self-signed certificates (dev / private networks).
+const DAEMON_TLS_VERIFY = process.env.EGH_DAEMON_TLS_VERIFY !== "false";
+
 interface WsClient {
   ws: WebSocket;
   serverId: number;
@@ -39,7 +36,6 @@ interface WsClient {
   statsInterval: ReturnType<typeof setInterval> | null;
   consoleInterval: ReturnType<typeof setInterval> | null;
   lastLogIndex: number;
-  /** Live connection to the Wings daemon (only set when using WingsProvider) */
   daemonWs: WebSocket | null;
 }
 
@@ -49,7 +45,6 @@ function send(ws: WebSocket, type: string, data: unknown): void {
   }
 }
 
-/** Convert Wings stats JSON payload to the panel's ServerStats shape */
 function translateWingsStats(raw: Record<string, unknown>): object {
   const network = raw.network as Record<string, number> | undefined;
   return {
@@ -64,40 +59,18 @@ function translateWingsStats(raw: Record<string, unknown>): object {
   };
 }
 
-/**
- * Open a server-side WebSocket to the Wings daemon and proxy events to the
- * panel client.  Returns the daemon WebSocket so the caller can close it.
- *
- * Wings events received:
- *   "console output"  → panel "console"
- *   "install output"  → panel "console"
- *   "status"          → panel "status"
- *   "stats"           → panel "stats" (JSON-parsed and translated)
- *   "auth success"    → logged only
- */
 function openDaemonWebSocket(
   panelWs: WebSocket,
   server: ProviderServer,
   node: ProviderNode,
+  token: string,
 ): WebSocket {
   const wsScheme = node.scheme === "https" ? "wss" : "ws";
   const url = `${wsScheme}://${node.fqdn}:${node.daemonPort}/api/servers/${server.uuid}/ws`;
 
-  let token: string;
-  try {
-    token = makeWingsToken(node);
-  } catch (err) {
-    logger.error({ err, serverId: server.id }, "Cannot create daemon auth token for WebSocket");
-    // Return a dummy closed WebSocket — caller checks readyState before use
-    const dummy = new WebSocket("ws://127.0.0.1:1");
-    dummy.on("open", () => dummy.close());
-    return dummy;
-  }
-
   const daemonWs = new WebSocket(url, {
     headers: { Authorization: `Bearer ${token}` },
-    // Daemon nodes may use self-signed TLS certs; the JWT provides auth
-    rejectUnauthorized: false,
+    rejectUnauthorized: DAEMON_TLS_VERIFY,
   });
 
   daemonWs.on("open", () => {
@@ -112,9 +85,16 @@ function openDaemonWebSocket(
         case "install output":
           send(panelWs, "console", msg.args?.[0] ?? "");
           break;
-        case "status":
-          send(panelWs, "status", { status: msg.args?.[0] ?? "unknown" });
+        case "status": {
+          const status = msg.args?.[0] ?? "unknown";
+          send(panelWs, "status", { status });
+          // Persist daemon-reported status so the panel REST API stays accurate
+          db.update(serversTable)
+            .set({ status: status as "installing" | "offline" | "running" })
+            .where(eq(serversTable.id, server.id))
+            .catch((err) => logger.error({ err }, "Failed to persist daemon status update"));
           break;
+        }
         case "stats": {
           try {
             const statsRaw = JSON.parse(msg.args?.[0] ?? "{}") as Record<string, unknown>;
@@ -125,21 +105,18 @@ function openDaemonWebSocket(
           break;
         }
         case "auth success":
-          logger.debug({ serverId: server.id }, "Daemon WebSocket auth success");
+          logger.debug({ serverId: server.id }, "Daemon auth success");
           break;
         default:
           logger.debug({ event: msg.event, serverId: server.id }, "Unhandled daemon WS event");
       }
     } catch (err) {
-      logger.error({ err }, "Failed to parse daemon WebSocket message");
+      logger.error({ err }, "Failed to parse daemon WS message");
     }
   });
 
   daemonWs.on("close", (code, reason) => {
-    logger.info(
-      { serverId: server.id, code, reason: reason.toString() },
-      "Daemon WebSocket closed",
-    );
+    logger.info({ serverId: server.id, code, reason: reason.toString() }, "Daemon WebSocket closed");
     if (panelWs.readyState === WebSocket.OPEN) {
       panelWs.close(1011, "Daemon disconnected");
     }
@@ -247,10 +224,17 @@ export function attachWebSocketServer(httpServer: Server): WebSocketServer {
     };
 
     if (isWings) {
-      // ── Wings mode: open a server-side daemon WS and proxy everything ────
-      client.daemonWs = openDaemonWebSocket(ws, ctx.providerServer, ctx.providerNode);
+      let daemonToken: string;
+      try {
+        daemonToken = makeWingsToken(ctx.providerNode);
+      } catch (err) {
+        logger.error({ err, serverId }, "Cannot create daemon auth token for WebSocket");
+        send(ws, "auth_error", "Node authentication is not configured");
+        ws.close(1011, "Daemon auth error");
+        return;
+      }
+      client.daemonWs = openDaemonWebSocket(ws, ctx.providerServer, ctx.providerNode, daemonToken);
     } else {
-      // ── Mock mode: replay buffered logs and poll for new ones ─────────────
       const recentLogs = mockProvider.getRecentLogs(serverId);
       for (const line of recentLogs) {
         send(ws, "console", line);
@@ -282,7 +266,6 @@ export function attachWebSocketServer(httpServer: Server): WebSocketServer {
         if (!msg.event) return;
 
         if (isWings) {
-          // ── Wings: translate our protocol → Wings protocol and forward ────
           const dws = client.daemonWs;
           if (!dws || dws.readyState !== WebSocket.OPEN) return;
           switch (msg.event) {
@@ -297,7 +280,6 @@ export function attachWebSocketServer(httpServer: Server): WebSocketServer {
           return;
         }
 
-        // ── Mock: execute locally ────────────────────────────────────────────
         switch (msg.event) {
           case "send_command": {
             const command = msg.args?.[0];
