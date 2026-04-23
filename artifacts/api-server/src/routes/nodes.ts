@@ -160,6 +160,40 @@ router.post("/nodes/:id/regen-token", requireAdmin, async (req, res): Promise<vo
   res.json({ registrationToken: newToken, status: node.status });
 });
 
+// Heartbeat — called by the EGH Node agent; no admin session required
+// Auth: Bearer <registrationToken> in Authorization header
+router.post("/nodes/:id/heartbeat", async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+
+  const authHeader = req.headers["authorization"] ?? "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+
+  if (!token) {
+    res.status(401).json({ error: "Missing Bearer token" });
+    return;
+  }
+
+  const [node] = await db.select().from(nodesTable).where(eq(nodesTable.id, id));
+  if (!node) {
+    res.status(404).json({ error: "Node not found" });
+    return;
+  }
+
+  if (!node.registrationToken || node.registrationToken !== token) {
+    res.status(403).json({ error: "Invalid registration token" });
+    return;
+  }
+
+  const now = new Date();
+  await db
+    .update(nodesTable)
+    .set({ status: "online", lastHeartbeatAt: now, updatedAt: now })
+    .where(eq(nodesTable.id, id));
+
+  res.json({ ok: true, status: "online" });
+});
+
 router.delete("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);

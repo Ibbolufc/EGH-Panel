@@ -21,6 +21,7 @@ export const nodesTable = pgTable("nodes", {
   daemonToken: text("daemon_token"),
   registrationToken: text("registration_token"),
   notes: text("notes"),
+  lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

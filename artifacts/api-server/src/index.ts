@@ -3,6 +3,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { attachWebSocketServer } from "./ws/consoleServer";
 import { startScheduleRunner } from "./cron/scheduleRunner";
+import { startNodeHeartbeatWatcher } from "./cron/nodeHeartbeatWatcher";
 
 const rawPort = process.env["PORT"];
 
@@ -24,6 +25,7 @@ httpServer.listen(port, () => {
   logger.info({ port }, "EGH Panel API listening");
   logger.info("WebSocket console attached at /ws");
   startScheduleRunner();
+  startNodeHeartbeatWatcher();
 });
 
 httpServer.on("error", (err: NodeJS.ErrnoException) => {
