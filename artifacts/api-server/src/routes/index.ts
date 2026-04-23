@@ -12,6 +12,7 @@ import backupsRouter from "./backups";
 import schedulesRouter from "./schedules";
 import activityRouter from "./activity";
 import dashboardRouter from "./dashboard";
+import downloadRouter from "./download";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(backupsRouter);
 router.use(schedulesRouter);
 router.use(activityRouter);
 router.use(dashboardRouter);
+router.use(downloadRouter);
 
 export default router;
