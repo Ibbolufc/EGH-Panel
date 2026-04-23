@@ -160,6 +160,63 @@ router.post("/nodes/:id/regen-token", requireAdmin, async (req, res): Promise<vo
   res.json({ registrationToken: newToken, status: node.status });
 });
 
+// Test connection — admin triggers a live reachability check against the daemon
+router.post("/nodes/:id/test-connection", requireAdmin, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+
+  const [node] = await db.select().from(nodesTable).where(eq(nodesTable.id, id));
+  if (!node) {
+    res.status(404).json({ error: "Node not found" });
+    return;
+  }
+
+  const url = `${node.scheme}://${node.fqdn}:${node.daemonPort}/api/system`;
+
+  let sysData: Record<string, unknown>;
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(12_000),
+    });
+
+    if (!response.ok) {
+      res.json({
+        reachable: false,
+        error: `Daemon returned HTTP ${response.status}`,
+      });
+      return;
+    }
+
+    sysData = (await response.json()) as Record<string, unknown>;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const isTimeout = err instanceof Error && err.name === "TimeoutError";
+    res.json({
+      reachable: false,
+      error: isTimeout ? "Connection timed out (12 s)" : msg,
+    });
+    return;
+  }
+
+  // Daemon is reachable — optimistically mark it online
+  const now = new Date();
+  await db
+    .update(nodesTable)
+    .set({ status: "online", lastHeartbeatAt: now, updatedAt: now })
+    .where(eq(nodesTable.id, id));
+
+  res.json({
+    reachable: true,
+    version: sysData["version"] ?? "unknown",
+    architecture: sysData["architecture"] ?? "unknown",
+    os: sysData["os"] ?? "unknown",
+    cpuCount: sysData["cpu_count"] ?? 0,
+    kernelVersion: sysData["kernel_version"] ?? "unknown",
+    memoryTotal: sysData["memory_total"] ?? 0,
+  });
+});
+
 // Heartbeat — called by the EGH Node agent; no admin session required
 // Auth: Bearer <registrationToken> in Authorization header
 router.post("/nodes/:id/heartbeat", async (req, res): Promise<void> => {

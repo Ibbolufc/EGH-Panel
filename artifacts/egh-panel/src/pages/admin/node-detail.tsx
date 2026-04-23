@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import {
   ChevronRight, MemoryStick, HardDrive, Server as ServerIcon,
   MapPin, Globe, Plus, Trash2, Loader2, Save, Network,
-  FileText, Settings, Activity,
+  FileText, Settings, Activity, Wifi, CheckCircle2, XCircle,
 } from "lucide-react";
 
 // The API returns extra fields not yet reflected in the generated schema.
@@ -391,11 +391,39 @@ export default function NodeDetailPage() {
   const id = Number(params.id);
   const [tab, setTab] = useState<TabId>("overview");
   const [deletingAllocId, setDeletingAllocId] = useState<number | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    reachable: boolean;
+    error?: string;
+    version?: string;
+    architecture?: string;
+    os?: string;
+    cpuCount?: number;
+    kernelVersion?: string;
+    memoryTotal?: number;
+  } | null>(null);
   const { toast } = useToast();
 
   const { data: nodeData, isLoading: nodeLoading, refetch: refetchNode } = useGetNode(id);
   const { data: serversData, isLoading: serversLoading } = useListServers({ page: 1, limit: 200, nodeId: id });
   const deleteAllocation = useDeleteAllocation();
+
+  async function handleTestConnection() {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`/api/nodes/${id}/test-connection`, { method: "POST" });
+      const data = await res.json() as typeof testResult;
+      setTestResult(data);
+      if (data?.reachable) {
+        refetchNode();
+      }
+    } catch {
+      setTestResult({ reachable: false, error: "Request failed — check panel network connectivity" });
+    } finally {
+      setIsTesting(false);
+    }
+  }
 
   // Cast to extended type: NodeDetail is correct but location/notes/registrationToken
   // are returned by the API and defined in DB schema; generated types don't include them yet.
@@ -546,6 +574,66 @@ export default function NodeDetailPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Connection test */}
+            <div className="rounded-xl border border-border/60 bg-card p-4">
+              <div className="flex items-center justify-between gap-4">
+                <SectionHeader
+                  icon={Wifi}
+                  title="Connection Test"
+                  subtitle={`Verify daemon reachability at ${node.scheme}://${node.fqdn}:${node.daemonPort}`}
+                />
+                <button
+                  onClick={handleTestConnection}
+                  disabled={isTesting}
+                  className="shrink-0 inline-flex items-center gap-2 rounded-lg border border-border/60 bg-white/5 px-4 py-2 text-sm font-medium text-foreground hover:bg-white/8 transition-colors disabled:opacity-50"
+                >
+                  {isTesting
+                    ? <><Loader2 className="h-4 w-4 animate-spin" />Testing…</>
+                    : <><Wifi className="h-4 w-4" />Test Connection</>
+                  }
+                </button>
+              </div>
+
+              {testResult && (
+                <div className={cn(
+                  "mt-3 rounded-lg border p-3",
+                  testResult.reachable
+                    ? "border-emerald-500/30 bg-emerald-500/5"
+                    : "border-red-500/30 bg-red-500/5",
+                )}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {testResult.reachable
+                      ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                      : <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+                    }
+                    <span className={cn("text-sm font-semibold", testResult.reachable ? "text-emerald-400" : "text-red-400")}>
+                      {testResult.reachable ? "Daemon reachable" : "Daemon unreachable"}
+                    </span>
+                  </div>
+
+                  {testResult.reachable ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {[
+                        { label: "Version",    value: testResult.version },
+                        { label: "OS",         value: testResult.os },
+                        { label: "Arch",       value: testResult.architecture },
+                        { label: "CPU cores",  value: testResult.cpuCount != null ? String(testResult.cpuCount) : undefined },
+                        { label: "Kernel",     value: testResult.kernelVersion },
+                        { label: "Host RAM",   value: testResult.memoryTotal ? `${Math.round((testResult.memoryTotal as number) / 1024 / 1024 / 1024 * 10) / 10} GB` : undefined },
+                      ].filter((r) => r.value).map((row) => (
+                        <div key={row.label} className="rounded-md bg-white/4 px-2.5 py-1.5">
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/50 mb-0.5">{row.label}</p>
+                          <p className="text-xs font-mono font-medium text-foreground">{row.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground font-mono">{testResult.error}</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

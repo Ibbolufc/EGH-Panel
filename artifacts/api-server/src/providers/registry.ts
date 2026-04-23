@@ -2,18 +2,28 @@
  * Provider Registry
  *
  * Resolves the correct INodeProvider implementation for a given node.
- * Currently always returns the MockProvider.
  *
- * To add a real Wings or custom daemon provider:
- *   1. Implement INodeProvider in a new file (e.g. wings.ts)
- *   2. Register it here using the node's daemonToken or a config flag
+ * Selection logic:
+ *   - WingsProvider  → node has a daemonToken AND EGH_MOCK_PROVIDER != "true"
+ *   - MockProvider   → fallback (dev, testing, or nodes without tokens)
+ *
+ * To force mock in any environment:  EGH_MOCK_PROVIDER=true
+ * To use real Wings in development:  ensure node.daemonToken is set
+ *   (it is populated automatically from registrationToken when building
+ *    a ProviderNode — see serverService.ts)
  */
 
 import type { INodeProvider, ProviderNode } from "./types";
 import { mockProvider } from "./mock";
+import { wingsProvider } from "./wings";
 
-export function getProviderForNode(_node: ProviderNode): INodeProvider {
+const FORCE_MOCK = process.env.EGH_MOCK_PROVIDER === "true";
+
+export function getProviderForNode(node: ProviderNode): INodeProvider {
+  if (!FORCE_MOCK && node.daemonToken) {
+    return wingsProvider;
+  }
   return mockProvider;
 }
 
-export { mockProvider };
+export { mockProvider, wingsProvider };
