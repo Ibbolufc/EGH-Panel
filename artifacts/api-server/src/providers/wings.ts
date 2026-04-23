@@ -320,7 +320,7 @@ export class WingsProvider implements INodeProvider {
         },
       },
     };
-    await this.request(server.node, "POST", "/api/servers", { body: payload });
+    await this.request(server.node, "POST", `/api/servers/${server.uuid}`, { body: payload });
     await this.request(server.node, "POST", `/api/servers/${server.uuid}/install`);
   }
 
