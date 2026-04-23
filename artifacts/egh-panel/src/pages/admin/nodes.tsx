@@ -44,6 +44,9 @@ EGH_PANEL_URL="${panelUrl}"
 EGH_NODE_TOKEN="${registrationToken}"
 EGH_NODE_FQDN="${nodeFqdn}"
 EGH_NODE_PORT="${daemonPort}"
+EGH_CONFIG_DIR="/etc/egh-node"
+EGH_DATA_DIR="/var/lib/egh-node/volumes"
+EGH_AGENT_URL="https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64"
 
 # ── 1. Root check ──────────────────────────────────────────
 if [ "$(id -u)" -ne 0 ]; then
@@ -67,15 +70,16 @@ fi
 
 # ── 3. Download EGH Node agent ─────────────────────────────
 echo "[3/5] Downloading EGH Node agent..."
-mkdir -p /etc/pterodactyl /var/log/egh-node
-curl -fsSL \\
-  "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64" \\
-  -o /usr/local/bin/egh-node
+mkdir -p "\${EGH_CONFIG_DIR}" /var/log/egh-node
+# Compatibility symlink required by EGH Node runtime — do not remove
+ln -s "\${EGH_CONFIG_DIR}" /etc/pterodactyl 2>/dev/null || true
+curl -fsSL "\${EGH_AGENT_URL}" -o /usr/local/bin/egh-node
 chmod +x /usr/local/bin/egh-node
 
 # ── 4. Write EGH Node config ───────────────────────────────
 echo "[4/5] Writing EGH Node configuration..."
-cat > /etc/pterodactyl/config.yml << NODECONF
+mkdir -p "\${EGH_DATA_DIR}"
+cat > "\${EGH_CONFIG_DIR}/config.yml" << NODECONF
 debug: false
 api:
   host: "0.0.0.0"
@@ -84,7 +88,7 @@ api:
     enabled: false
   upload_limit: 100
 system:
-  data: "/var/lib/pterodactyl/volumes"
+  data: "\${EGH_DATA_DIR}"
   sftp:
     bind_port: 2022
 remote: "\${EGH_PANEL_URL}"
@@ -95,7 +99,7 @@ NODECONF
 
 # ── 5. Install & start EGH Node service ───────────────────
 echo "[5/5] Installing EGH Node service..."
-cat > /etc/systemd/system/egh-node.service << 'SVCEOF'
+cat > /etc/systemd/system/egh-node.service << SVCEOF
 [Unit]
 Description=EGH Node Agent
 After=docker.service
@@ -103,7 +107,7 @@ Requires=docker.service
 
 [Service]
 User=root
-WorkingDirectory=/etc/pterodactyl
+WorkingDirectory=\${EGH_CONFIG_DIR}
 LimitNOFILE=4096
 PIDFile=/var/run/egh-node/daemon.pid
 ExecStart=/usr/local/bin/egh-node
@@ -282,11 +286,11 @@ function InstallCommandModal({
                   },
                   {
                     n: "2", title: "Download EGH Node agent",
-                    code: "mkdir -p /etc/pterodactyl\ncurl -fsSL https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64 -o /usr/local/bin/egh-node\nchmod +x /usr/local/bin/egh-node",
+                    code: `mkdir -p /etc/egh-node\ncurl -fsSL "$EGH_AGENT_URL" -o /usr/local/bin/egh-node\nchmod +x /usr/local/bin/egh-node`,
                   },
                   {
                     n: "3", title: "Write EGH Node config",
-                    note: `Create /etc/pterodactyl/config.yml with remote: "${panelUrl}" and token: "${node.registrationToken}"`,
+                    note: `Write the EGH Node configuration file at $EGH_CONFIG_DIR/config.yml with remote: "${panelUrl}" and token: "${node.registrationToken}". The full install script handles this automatically.`,
                   },
                   {
                     n: "4", title: "Start EGH Node",
