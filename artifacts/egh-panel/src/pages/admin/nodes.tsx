@@ -638,7 +638,14 @@ interface PingResult {
 
 // ── Connectivity badge ────────────────────────────────────────────────────────
 function ConnectivityBadge({ ping }: { ping: PingResult }) {
-  if (ping.status === "idle") return null;
+  if (ping.status === "idle") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md border border-border/40 bg-white/3 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/50">
+        <Activity className="h-2.5 w-2.5" />
+        Not checked
+      </span>
+    );
+  }
 
   if (ping.status === "checking") {
     return (
@@ -699,23 +706,25 @@ export default function AdminNodes() {
       const body = await res.json();
       if (body.reachable) {
         setPingMap(prev => ({ ...prev, [nodeId]: { status: "reachable", latencyMs } }));
+        refetch();
       } else {
         setPingMap(prev => ({ ...prev, [nodeId]: { status: "unreachable", error: body.error } }));
       }
     } catch (err) {
       setPingMap(prev => ({ ...prev, [nodeId]: { status: "unreachable", error: err instanceof Error ? err.message : "Network error" } }));
     }
-  }, []);
+  }, [refetch]);
 
   const pingAll = useCallback(async () => {
     if (nodes.length === 0) return;
     setCheckingAll(true);
     try {
       await Promise.all(nodes.map((n: any) => pingNode(n.id)));
+      refetch();
     } finally {
       setCheckingAll(false);
     }
-  }, [nodes, pingNode]);
+  }, [nodes, pingNode, refetch]);
 
   async function handleDelete(id: number) {
     if (!confirm("Delete this node? All servers and allocations on it will be removed.")) return;
