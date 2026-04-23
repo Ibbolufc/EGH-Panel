@@ -282,7 +282,7 @@ export default function AdminSettings() {
                   <div className="flex items-start gap-2 rounded-lg border border-border/40 bg-white/2 p-3 text-xs text-muted-foreground">
                     <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary/60" />
                     <span>
-                      Use <code className="font-mono text-foreground/70">latest</code> to always serve the newest release, or pin to a specific tag like <code className="font-mono text-foreground/70">v1.11.14</code>. Changes take effect within 60 seconds — no redeploy needed.
+                      Use <code className="font-mono text-foreground/70">latest</code> to always serve the newest release, or pin to a specific tag like <code className="font-mono text-foreground/70">v1.11.14</code>. Changes take effect immediately — no redeploy needed.
                     </span>
                   </div>
 

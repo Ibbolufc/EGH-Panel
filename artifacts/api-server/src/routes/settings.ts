@@ -2,6 +2,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, panelSettingsTable } from "@workspace/db";
 import { requireAdmin } from "../lib/auth";
+import { invalidateVersionCache } from "./download";
 
 const router: Router = Router();
 
@@ -39,6 +40,7 @@ router.put("/settings/egh-node-version", requireAdmin, async (req, res): Promise
       set: { value: trimmed },
     });
 
+  invalidateVersionCache();
   res.json({ version: trimmed });
 });
 
