@@ -93,6 +93,17 @@ router.post("/servers", requireAdmin, validateBody(CreateServerBody), asyncHandl
     description: `Server "${server.name}" created`,
   });
 
+  // Best-effort: notify the daemon to set up the server container.
+  // Non-fatal — if the node is offline or not yet provisioned the admin
+  // can trigger a reinstall from the server detail page later.
+  try {
+    const { providerServer } = await buildProviderServer(server.id);
+    await getProviderForNode(providerServer.node).installServer(providerServer);
+    await db.update(serversTable).set({ status: "offline" }).where(eq(serversTable.id, server.id));
+  } catch {
+    // Daemon unreachable or node not configured yet — leave status as "installing"
+  }
+
   res.status(201).json(await formatServer(server));
 }));
 
@@ -150,12 +161,22 @@ router.delete("/servers/:id", requireAdmin, asyncHandler(async (req, res) => {
   const id = parseIntParam(req, res, "id");
   if (id === null) return;
 
-  const [server] = await db.delete(serversTable).where(eq(serversTable.id, id)).returning();
+  const [server] = await db.select().from(serversTable).where(eq(serversTable.id, id));
   if (!server) {
     res.status(404).json({ error: "Server not found" });
     return;
   }
 
+  // Best-effort: ask daemon to destroy the container and volumes before we
+  // remove the DB record.  Non-fatal — proceed with deletion regardless.
+  try {
+    const { providerServer } = await buildProviderServer(id);
+    await getProviderForNode(providerServer.node).deleteServer(providerServer);
+  } catch {
+    // Daemon offline, node not configured, or server was never provisioned
+  }
+
+  await db.delete(serversTable).where(eq(serversTable.id, id));
   await db.update(allocationsTable).set({ serverId: null }).where(eq(allocationsTable.serverId, id));
 
   await logActivity({

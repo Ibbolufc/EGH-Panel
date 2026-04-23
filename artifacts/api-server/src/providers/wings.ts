@@ -289,6 +289,10 @@ export class WingsProvider implements INodeProvider {
   async installServer(server: ProviderServer): Promise<void> {
     await this.request(server.node, "POST", `/api/servers/${server.uuid}/install`);
   }
+
+  async deleteServer(server: ProviderServer): Promise<void> {
+    await this.request(server.node, "DELETE", `/api/servers/${server.uuid}`);
+  }
 }
 
 export const wingsProvider = new WingsProvider();

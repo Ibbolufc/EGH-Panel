@@ -208,6 +208,10 @@ export class MockProvider implements INodeProvider {
   async installServer(_server: ProviderServer): Promise<void> {
   }
 
+  async deleteServer(server: ProviderServer): Promise<void> {
+    fileStore.delete(String(server.id));
+  }
+
   /** Return recent console lines for this server (used by WebSocket handler) */
   getRecentLogs(serverId: number): string[] {
     return consoleLogs[serverId] ?? [];

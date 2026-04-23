@@ -101,6 +101,9 @@ export interface INodeProvider {
 
   /** Trigger install/reinstall sequence */
   installServer(server: ProviderServer): Promise<void>;
+
+  /** Remove a server from the daemon, deleting its containers and volumes */
+  deleteServer(server: ProviderServer): Promise<void>;
 }
 
 /** Minimal node info passed to the provider */
