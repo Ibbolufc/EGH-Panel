@@ -5,3 +5,4 @@ export * from "./nodes";
 export * from "./servers";
 export * from "./files";
 export * from "./activity";
+export * from "./settings";

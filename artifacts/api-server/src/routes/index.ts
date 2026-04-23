@@ -13,6 +13,7 @@ import schedulesRouter from "./schedules";
 import activityRouter from "./activity";
 import dashboardRouter from "./dashboard";
 import downloadRouter from "./download";
+import settingsRouter from "./settings";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(schedulesRouter);
 router.use(activityRouter);
 router.use(dashboardRouter);
 router.use(downloadRouter);
+router.use(settingsRouter);
 
 export default router;

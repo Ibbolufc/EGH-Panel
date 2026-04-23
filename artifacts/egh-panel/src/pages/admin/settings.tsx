@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { useAuth } from "@/components/providers/auth-provider";
-import { useChangePassword } from "@workspace/api-client-react";
-import { Shield, Lock, Server, CheckCircle2, Loader2, Eye, EyeOff, Info } from "lucide-react";
+import { useChangePassword, customFetch } from "@workspace/api-client-react";
+import { Shield, Lock, Server, CheckCircle2, Loader2, Eye, EyeOff, Info, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
@@ -96,23 +96,58 @@ export default function AdminSettings() {
     }
   }
 
+  const [nodeVersion, setNodeVersion] = useState("latest");
+  const [nodeVersionInput, setNodeVersionInput] = useState("latest");
+  const [versionLoading, setVersionLoading] = useState(true);
+  const [versionSaving, setVersionSaving] = useState(false);
+  const [versionSaved, setVersionSaved] = useState(false);
+
+  useEffect(() => {
+    customFetch<{ version: string }>("/api/settings/egh-node-version")
+      .then((data) => {
+        setNodeVersion(data.version);
+        setNodeVersionInput(data.version);
+      })
+      .catch(() => {})
+      .finally(() => setVersionLoading(false));
+  }, []);
+
+  async function handleVersionSave(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = nodeVersionInput.trim();
+    if (!trimmed) return;
+    setVersionSaving(true);
+    try {
+      const data = await customFetch<{ version: string }>("/api/settings/egh-node-version", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: trimmed }),
+      });
+      setNodeVersion(data.version);
+      setNodeVersionInput(data.version);
+      setVersionSaved(true);
+      toast({ title: "Agent version updated" });
+      setTimeout(() => setVersionSaved(false), 5000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save version";
+      toast({ title: msg, variant: "destructive" });
+    } finally {
+      setVersionSaving(false);
+    }
+  }
+
   return (
     <AdminLayout title="Settings">
       <div className="space-y-4">
-        {/* Page header */}
         <div>
           <h2 className="text-xl font-bold tracking-tight text-foreground">Settings</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">Account details and panel configuration</p>
         </div>
 
-        {/* Two-column layout */}
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {/* LEFT COLUMN — read-only info */}
           <div className="flex flex-col gap-4">
-            {/* Account info */}
             <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
               <CardHeader icon={Shield} title="Account" desc="Your identity on this panel" />
-              {/* Avatar + name strip */}
               <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-white/3 border border-border/40">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary font-bold ring-1 ring-primary/30 text-sm">
                   {user?.firstName?.[0]}{user?.lastName?.[0]}
@@ -133,7 +168,6 @@ export default function AdminSettings() {
               ]} />
             </div>
 
-            {/* Panel info */}
             <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
               <CardHeader icon={Server} title="Panel Information" />
               <InfoGrid items={[
@@ -149,9 +183,8 @@ export default function AdminSettings() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN — change password */}
-          <div>
-            <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm h-full">
+          <div className="flex flex-col gap-4">
+            <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
               <CardHeader icon={Lock} title="Change Password" desc="Use a strong password of at least 8 characters" />
 
               {pwSuccess && (
@@ -212,6 +245,61 @@ export default function AdminSettings() {
                   </button>
                 </div>
               </form>
+            </div>
+
+            <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+              <CardHeader
+                icon={Download}
+                title="EGH Node Agent Version"
+                desc="Version served to new nodes via the install script"
+              />
+
+              {versionLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                </div>
+              ) : (
+                <form onSubmit={handleVersionSave} className="space-y-3.5">
+                  {versionSaved && (
+                    <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      Version updated — new installs will use <strong className="ml-1">{nodeVersion}</strong>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className={labelClass}>Binary Version</label>
+                    <input
+                      type="text"
+                      value={nodeVersionInput}
+                      onChange={(e) => setNodeVersionInput(e.target.value)}
+                      placeholder='e.g. latest or v1.11.14'
+                      className={inputClass}
+                      data-testid="input-node-version"
+                    />
+                  </div>
+
+                  <div className="flex items-start gap-2 rounded-lg border border-border/40 bg-white/2 p-3 text-xs text-muted-foreground">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary/60" />
+                    <span>
+                      Use <code className="font-mono text-foreground/70">latest</code> to always serve the newest release, or pin to a specific tag like <code className="font-mono text-foreground/70">v1.11.14</code>. Changes take effect within 60 seconds — no redeploy needed.
+                    </span>
+                  </div>
+
+                  <div>
+                    <button
+                      type="submit"
+                      disabled={versionSaving || !nodeVersionInput.trim() || nodeVersionInput.trim() === nodeVersion}
+                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50"
+                      data-testid="button-save-node-version"
+                    >
+                      {versionSaving ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
+                      ) : "Save Version"}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </div>

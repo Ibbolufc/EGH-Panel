@@ -1,11 +1,12 @@
 import { Router } from "express";
 import https from "https";
 import http from "http";
+import { eq } from "drizzle-orm";
+import { db, panelSettingsTable } from "@workspace/db";
 
 const router: Router = Router();
 
-const WINGS_RELEASE_URL =
-  "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64";
+const VERSION_KEY = "egh_node_version";
 
 const ALLOWED_REDIRECT_HOSTS = [
   "github.com",
@@ -15,6 +16,34 @@ const ALLOWED_REDIRECT_HOSTS = [
 ];
 
 const DOWNLOAD_TIMEOUT_MS = 30_000;
+
+let _cachedVersion: string | null = null;
+let _cacheExpiresAt = 0;
+const CACHE_TTL_MS = 60_000;
+
+async function getConfiguredVersion(): Promise<string> {
+  const now = Date.now();
+  if (_cachedVersion !== null && now < _cacheExpiresAt) {
+    return _cachedVersion;
+  }
+  const rows = await db
+    .select()
+    .from(panelSettingsTable)
+    .where(eq(panelSettingsTable.key, VERSION_KEY))
+    .limit(1);
+  const version = rows[0]?.value ?? "latest";
+  _cachedVersion = version;
+  _cacheExpiresAt = now + CACHE_TTL_MS;
+  return version;
+}
+
+function buildWingsUrl(version: string): string {
+  const safe = version.replace(/[^a-z0-9._-]/gi, "");
+  if (safe === "latest" || safe === "") {
+    return "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64";
+  }
+  return `https://github.com/pterodactyl/wings/releases/download/${safe}/wings_linux_amd64`;
+}
 
 function isAllowedHost(url: string): boolean {
   try {
@@ -91,8 +120,15 @@ function fetchWithRedirects(
   });
 }
 
-router.get("/download/egh-node", (_req, res) => {
-  fetchWithRedirects(WINGS_RELEASE_URL, res);
+router.get("/download/egh-node", async (_req, res): Promise<void> => {
+  const version = await getConfiguredVersion();
+  const url = buildWingsUrl(version);
+  fetchWithRedirects(url, res);
 });
+
+export function invalidateVersionCache(): void {
+  _cachedVersion = null;
+  _cacheExpiresAt = 0;
+}
 
 export default router;
