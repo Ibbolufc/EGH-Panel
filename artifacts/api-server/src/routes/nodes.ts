@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, count } from "drizzle-orm";
+import { eq, count, isNull, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { db, nodesTable, allocationsTable, serversTable } from "@workspace/db";
 import { CreateNodeBody } from "@workspace/api-zod";
@@ -252,12 +252,22 @@ router.post("/nodes/:id/heartbeat", async (req, res): Promise<void> => {
 
   // First heartbeat: generate a long-lived daemonToken and return it so the
   // agent can switch away from the one-time registrationToken.
+  // The WHERE daemon_token IS NULL guard makes this atomic — concurrent
+  // first heartbeats only produce one winner; others read the stored token.
   if (!node.daemonToken) {
-    const daemonToken = "daemon_" + randomBytes(32).toString("hex");
-    await db
+    const candidate = "daemon_" + randomBytes(32).toString("hex");
+    const [updated] = await db
       .update(nodesTable)
-      .set({ status: "online", daemonToken, lastHeartbeatAt: now, updatedAt: now })
-      .where(eq(nodesTable.id, id));
+      .set({ status: "online", daemonToken: candidate, lastHeartbeatAt: now, updatedAt: now })
+      .where(and(eq(nodesTable.id, id), isNull(nodesTable.daemonToken)))
+      .returning({ daemonToken: nodesTable.daemonToken });
+
+    // Use the stored token — either ours (won the race) or the concurrent winner's.
+    const daemonToken = updated?.daemonToken ?? (
+      await db.select({ daemonToken: nodesTable.daemonToken })
+        .from(nodesTable).where(eq(nodesTable.id, id)).limit(1)
+    )[0]?.daemonToken ?? candidate;
+
     res.json({ ok: true, status: "online", daemonToken });
     return;
   }
