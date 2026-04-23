@@ -44,9 +44,9 @@ EGH_PANEL_URL="${panelUrl}"
 EGH_NODE_TOKEN="${registrationToken}"
 EGH_NODE_FQDN="${nodeFqdn}"
 EGH_NODE_PORT="${daemonPort}"
-EGH_CONFIG_DIR="/etc/egh-node"
-EGH_DATA_DIR="/var/lib/egh-node/volumes"
-EGH_AGENT_URL="${panelUrl}/api/download/egh-node"
+EGH_CONFIG_DIR="/etc/pterodactyl"
+EGH_DATA_DIR="/var/lib/pterodactyl/volumes"
+EGH_AGENT_URL="https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64"
 
 # ── 1. Root check ──────────────────────────────────────────
 if [ "$(id -u)" -ne 0 ]; then
