@@ -28,6 +28,9 @@ import { mockProvider } from "../providers/mock";
 // that use self-signed certificates (dev / private networks).
 const DAEMON_TLS_VERIFY = process.env.EGH_DAEMON_TLS_VERIFY !== "false";
 
+type ServerStatus = "installing" | "install_failed" | "running" | "offline" | "stopping" | "starting" | "suspended";
+const VALID_STATUSES: ReadonlySet<string> = new Set<ServerStatus>(["installing", "install_failed", "running", "offline", "stopping", "starting", "suspended"]);
+
 interface WsClient {
   ws: WebSocket;
   serverId: number;
@@ -89,10 +92,14 @@ function openDaemonWebSocket(
           const status = msg.args?.[0] ?? "unknown";
           send(panelWs, "status", { status });
           // Persist daemon-reported status so the panel REST API stays accurate
-          db.update(serversTable)
-            .set({ status: status as "installing" | "offline" | "running" })
-            .where(eq(serversTable.id, server.id))
-            .catch((err) => logger.error({ err }, "Failed to persist daemon status update"));
+          if (VALID_STATUSES.has(status)) {
+            db.update(serversTable)
+              .set({ status: status as ServerStatus })
+              .where(eq(serversTable.id, server.id))
+              .catch((err) => logger.error({ err }, "Failed to persist daemon status update"));
+          } else {
+            logger.debug({ serverId: server.id, status }, "Daemon sent unknown status — not persisted");
+          }
           break;
         }
         case "stats": {
