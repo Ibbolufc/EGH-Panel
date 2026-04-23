@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { useListNodes, useCreateNode, useDeleteNode } from "@workspace/api-client-react";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -630,11 +631,11 @@ export default function AdminNodes() {
   const [showCreate, setShowCreate] = useState(false);
   const [installNode, setInstallNode] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const { data, isLoading, refetch } = useListNodes({ page: 1, limit: 50 });
+  const { data, isLoading, refetch } = useListNodes();
   const deleteNode = useDeleteNode();
   const { toast } = useToast();
 
-  const nodes = data?.data ?? [];
+  const nodes = Array.isArray(data) ? data : [];
   const pendingCount = nodes.filter((n: any) => n.status === "pending").length;
 
   async function handleDelete(id: number) {
@@ -772,10 +773,11 @@ export default function AdminNodes() {
             {nodes.map((node: any) => {
               const isPending = node.status === "pending";
               return (
-                <div
+                <Link
                   key={node.id}
+                  href={`/admin/nodes/${node.id}`}
                   className={cn(
-                    "rounded-xl border bg-card p-4 shadow-sm",
+                    "block rounded-xl border bg-card p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-card/80 cursor-pointer",
                     isPending ? "border-amber-500/25 bg-amber-500/3" : "border-border/60"
                   )}
                   data-testid={`card-node-${node.id}`}
@@ -790,7 +792,12 @@ export default function AdminNodes() {
                         )}>
                           <NodeStatusIcon status={node.status} />
                         </div>
-                        <span className="font-semibold text-foreground text-sm truncate">{node.name}</span>
+                        <span
+                          className="font-semibold text-foreground text-sm truncate"
+                          data-testid={`link-node-${node.id}`}
+                        >
+                          {node.name}
+                        </span>
                         {node.location && (
                           <span className="flex items-center gap-1 text-[11px] text-muted-foreground/60 shrink-0">
                             <MapPin className="h-3 w-3" />{node.location}
@@ -804,7 +811,7 @@ export default function AdminNodes() {
                     <div className="flex shrink-0 items-center gap-1.5">
                       <StatusBadge status={node.status} />
                       <button
-                        onClick={() => handleDelete(node.id)}
+                        onClick={(e) => { e.preventDefault(); handleDelete(node.id); }}
                         disabled={deletingId === node.id}
                         className="rounded-md p-1.5 text-muted-foreground/40 hover:bg-red-500/10 hover:text-red-400 transition-colors disabled:opacity-50"
                         data-testid={`button-delete-node-${node.id}`}
@@ -824,7 +831,7 @@ export default function AdminNodes() {
                         <p className="text-[11px] text-amber-400/60">Run the EGH Node install command on this machine to bring it online.</p>
                       </div>
                       <button
-                        onClick={() => setInstallNode(node)}
+                        onClick={(e) => { e.preventDefault(); setInstallNode(node); }}
                         className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-amber-500/15 border border-amber-500/25 px-2.5 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/25 transition-colors"
                       >
                         <Terminal className="h-3.5 w-3.5" />
@@ -860,19 +867,23 @@ export default function AdminNodes() {
                     </p>
                   )}
 
-                  {/* Footer actions (non-pending) */}
-                  {!isPending && node.registrationToken && (
-                    <div className="mt-3 pt-2.5 border-t border-border/40 flex gap-2">
+                  {/* Footer actions */}
+                  <div className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between">
+                    <div className="flex items-center gap-1 text-xs text-primary/70">
+                      <ArrowRight className="h-3.5 w-3.5" />
+                      View Details
+                    </div>
+                    {node.registrationToken && (
                       <button
-                        onClick={() => setInstallNode(node)}
+                        onClick={(e) => { e.preventDefault(); setInstallNode(node); }}
                         className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-white/3 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground transition-colors"
                       >
                         <Download className="h-3.5 w-3.5" />
                         Install Command
                       </button>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                </Link>
               );
             })}
           </div>

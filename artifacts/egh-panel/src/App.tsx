@@ -13,6 +13,7 @@ import AdminDashboard from "@/pages/admin/dashboard";
 import AdminUsers from "@/pages/admin/users";
 import AdminServers from "@/pages/admin/servers";
 import AdminNodes from "@/pages/admin/nodes";
+import AdminNodeDetail from "@/pages/admin/node-detail";
 import AdminEggs from "@/pages/admin/eggs";
 import AdminActivity from "@/pages/admin/activity";
 import AdminSettings from "@/pages/admin/settings";
@@ -129,6 +130,7 @@ function Router() {
         <Route path="/admin/users">{() => <AdminRoute component={AdminUsers} />}</Route>
         <Route path="/admin/servers">{() => <AdminRoute component={AdminServers} />}</Route>
         <Route path="/admin/nodes">{() => <AdminRoute component={AdminNodes} />}</Route>
+        <Route path="/admin/nodes/:id">{() => <AdminRoute component={AdminNodeDetail} />}</Route>
         <Route path="/admin/eggs">{() => <AdminRoute component={AdminEggs} />}</Route>
         <Route path="/admin/activity">{() => <AdminRoute component={AdminActivity} />}</Route>
         <Route path="/admin/settings">{() => <AdminRoute component={AdminSettings} />}</Route>
