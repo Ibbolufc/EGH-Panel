@@ -43,6 +43,19 @@ export async function buildProviderServer(serverId: number): Promise<{
     daemonToken: node.daemonToken ?? node.registrationToken,
   };
 
+  const [allocation] = await db
+    .select({ ip: allocationsTable.ip, port: allocationsTable.port })
+    .from(allocationsTable)
+    .where(eq(allocationsTable.id, server.allocationId));
+
+  const serverVars = await db
+    .select({ envVariable: serverVariablesTable.envVariable, value: serverVariablesTable.value })
+    .from(serverVariablesTable)
+    .where(eq(serverVariablesTable.serverId, serverId));
+
+  const environment: Record<string, string> = {};
+  for (const v of serverVars) environment[v.envVariable] = v.value ?? "";
+
   const providerServer: ProviderServer = {
     id: server.id,
     uuid: server.uuid,
@@ -52,6 +65,9 @@ export async function buildProviderServer(serverId: number): Promise<{
     memoryLimit: server.memoryLimit,
     diskLimit: server.diskLimit,
     cpuLimit: server.cpuLimit,
+    allocationIp: allocation?.ip ?? "0.0.0.0",
+    allocationPort: allocation?.port ?? 0,
+    environment,
   };
 
   return { providerServer, dbServer: server };

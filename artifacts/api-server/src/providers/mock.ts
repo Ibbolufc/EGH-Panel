@@ -205,6 +205,9 @@ export class MockProvider implements INodeProvider {
   async restoreBackup(_server: ProviderServer, _backupUuid: string): Promise<void> {
   }
 
+  async provisionServer(_server: ProviderServer): Promise<void> {
+  }
+
   async installServer(_server: ProviderServer): Promise<void> {
   }
 

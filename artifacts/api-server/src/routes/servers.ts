@@ -65,7 +65,7 @@ router.post("/servers", requireAdmin, validateBody(CreateServerBody), asyncHandl
 
   const [egg] = await db.select().from(eggsTable).where(eq(eggsTable.id, serverData.eggId));
 
-  const [server] = await db.insert(serversTable).values({
+  let [server] = await db.insert(serversTable).values({
     ...serverData,
     status: "installing",
     startup: serverData.startup ?? egg?.startup,
@@ -93,13 +93,17 @@ router.post("/servers", requireAdmin, validateBody(CreateServerBody), asyncHandl
     description: `Server "${server.name}" created`,
   });
 
-  // Best-effort: notify the daemon to set up the server container.
-  // Non-fatal — if the node is offline or not yet provisioned the admin
-  // can trigger a reinstall from the server detail page later.
+  // Best-effort: send full server config to the daemon and trigger install.
+  // Non-fatal — if the node is offline the server stays "installing" and the
+  // admin can retry via a reinstall action later.
   try {
     const { providerServer } = await buildProviderServer(server.id);
-    await getProviderForNode(providerServer.node).installServer(providerServer);
-    await db.update(serversTable).set({ status: "offline" }).where(eq(serversTable.id, server.id));
+    await getProviderForNode(providerServer.node).provisionServer(providerServer);
+    [server] = await db
+      .update(serversTable)
+      .set({ status: "offline" })
+      .where(eq(serversTable.id, server.id))
+      .returning();
   } catch {
     // Daemon unreachable or node not configured yet — leave status as "installing"
   }

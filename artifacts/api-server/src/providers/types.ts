@@ -99,7 +99,15 @@ export interface INodeProvider {
   /** Initiate a backup restore */
   restoreBackup(server: ProviderServer, backupUuid: string): Promise<void>;
 
-  /** Trigger install/reinstall sequence */
+  /**
+   * Provision a brand-new server on the daemon.
+   * Sends the full Wings-compatible configuration (image, startup, resources,
+   * allocation, env vars) and then triggers the install sequence.
+   * Called once, immediately after the panel's DB insert.
+   */
+  provisionServer(server: ProviderServer): Promise<void>;
+
+  /** Trigger a reinstall sequence on an already-provisioned server */
   installServer(server: ProviderServer): Promise<void>;
 
   /** Remove a server from the daemon, deleting its containers and volumes */
@@ -125,6 +133,11 @@ export interface ProviderServer {
   memoryLimit: number;
   diskLimit: number;
   cpuLimit: number;
+  /** Primary allocation details for the daemon provisioning payload */
+  allocationIp: string;
+  allocationPort: number;
+  /** Current environment variable values (envVar name → value) */
+  environment: Record<string, string>;
 }
 
 export class ProviderError extends Error {

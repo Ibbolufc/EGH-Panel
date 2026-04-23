@@ -286,6 +286,44 @@ export class WingsProvider implements INodeProvider {
     );
   }
 
+  async provisionServer(server: ProviderServer): Promise<void> {
+    const payload = {
+      uuid: server.uuid,
+      settings: {
+        uuid: server.uuid,
+        suspended: false,
+        environment: server.environment,
+        invocation: server.startup ?? "",
+        skip_egg_scripts: false,
+        build: {
+          memory_limit: server.memoryLimit,
+          swap: 0,
+          io_weight: 500,
+          cpu_limit: server.cpuLimit,
+          disk: server.diskLimit,
+          threads: null,
+          oom_disabled: true,
+        },
+        container: {
+          image: server.dockerImage ?? "ghcr.io/pterodactyl/yolks:debian",
+          timezone: "UTC",
+          env: server.environment,
+          requires_rebuild: false,
+        },
+        allocations: {
+          force_outgoing_ip: false,
+          default: {
+            ip: server.allocationIp,
+            port: server.allocationPort,
+          },
+          mappings: {},
+        },
+      },
+    };
+    await this.request(server.node, "POST", "/api/servers", { body: payload });
+    await this.request(server.node, "POST", `/api/servers/${server.uuid}/install`);
+  }
+
   async installServer(server: ProviderServer): Promise<void> {
     await this.request(server.node, "POST", `/api/servers/${server.uuid}/install`);
   }
