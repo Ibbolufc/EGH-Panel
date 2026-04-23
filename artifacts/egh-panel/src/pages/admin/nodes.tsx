@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Link } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { useListNodes, useCreateNode, useDeleteNode } from "@workspace/api-client-react";
@@ -7,7 +7,7 @@ import {
   Plus, Cpu, HardDrive, MemoryStick, Server as ServerIcon, Trash2, Globe,
   Terminal, ArrowRight, CheckCircle2, Loader2, Copy, Check,
   AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Download,
-  MapPin, FileText, Wifi, WifiOff, Clock
+  MapPin, FileText, Wifi, WifiOff, Clock, Activity
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -627,17 +627,95 @@ function NodeStatusIcon({ status }: { status: string }) {
   return <WifiOff className="h-3.5 w-3.5 text-slate-400" />;
 }
 
+// ── Connectivity probe types ───────────────────────────────────────────────────
+type PingStatus = "idle" | "checking" | "reachable" | "unreachable";
+
+interface PingResult {
+  status: PingStatus;
+  latencyMs?: number;
+  error?: string;
+}
+
+// ── Connectivity badge ────────────────────────────────────────────────────────
+function ConnectivityBadge({ ping }: { ping: PingResult }) {
+  if (ping.status === "idle") return null;
+
+  if (ping.status === "checking") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+        Checking…
+      </span>
+    );
+  }
+
+  if (ping.status === "reachable") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+        <Activity className="h-2.5 w-2.5" />
+        {ping.latencyMs !== undefined ? `${ping.latencyMs} ms` : "Online"}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
+      title={ping.error}
+    >
+      <WifiOff className="h-2.5 w-2.5" />
+      Unreachable
+    </span>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function AdminNodes() {
   const [showCreate, setShowCreate] = useState(false);
   const [installNode, setInstallNode] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [pingMap, setPingMap] = useState<Record<number, PingResult>>({});
+  const [checkingAll, setCheckingAll] = useState(false);
   const { data, isLoading, refetch } = useListNodes({ query: { refetchInterval: 30_000 } });
   const deleteNode = useDeleteNode();
   const { toast } = useToast();
 
   const nodes = Array.isArray(data) ? data : [];
   const pendingCount = nodes.filter((n: any) => n.status === "pending").length;
+
+  const pingNode = useCallback(async (nodeId: number): Promise<void> => {
+    setPingMap(prev => ({ ...prev, [nodeId]: { status: "checking" } }));
+    const token = localStorage.getItem("egh_token");
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const t0 = performance.now();
+    try {
+      const res = await fetch(`/api/nodes/${nodeId}/test-connection`, { method: "POST", headers });
+      const latencyMs = Math.round(performance.now() - t0);
+      if (!res.ok) {
+        setPingMap(prev => ({ ...prev, [nodeId]: { status: "unreachable", error: `HTTP ${res.status}` } }));
+        return;
+      }
+      const body = await res.json();
+      if (body.reachable) {
+        setPingMap(prev => ({ ...prev, [nodeId]: { status: "reachable", latencyMs } }));
+      } else {
+        setPingMap(prev => ({ ...prev, [nodeId]: { status: "unreachable", error: body.error } }));
+      }
+    } catch (err) {
+      setPingMap(prev => ({ ...prev, [nodeId]: { status: "unreachable", error: err instanceof Error ? err.message : "Network error" } }));
+    }
+  }, []);
+
+  const pingAll = useCallback(async () => {
+    if (nodes.length === 0) return;
+    setCheckingAll(true);
+    try {
+      await Promise.all(nodes.map((n: any) => pingNode(n.id)));
+    } finally {
+      setCheckingAll(false);
+    }
+  }, [nodes, pingNode]);
 
   async function handleDelete(id: number) {
     if (!confirm("Delete this node? All servers and allocations on it will be removed.")) return;
@@ -679,14 +757,31 @@ export default function AdminNodes() {
               )}
             </p>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
-            data-testid="button-create-node"
-          >
-            <Plus className="h-4 w-4" />
-            Add Node
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {nodes.length > 0 && (
+              <button
+                onClick={pingAll}
+                disabled={checkingAll}
+                className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-white/5 px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors disabled:opacity-50"
+                data-testid="button-check-all-nodes"
+                title="Ping all nodes"
+              >
+                {checkingAll
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Activity className="h-4 w-4" />
+                }
+                Check All
+              </button>
+            )}
+            <button
+              onClick={() => setShowCreate(true)}
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
+              data-testid="button-create-node"
+            >
+              <Plus className="h-4 w-4" />
+              Add Node
+            </button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -810,6 +905,7 @@ export default function AdminNodes() {
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
+                      <ConnectivityBadge ping={pingMap[node.id] ?? { status: "idle" }} />
                       <StatusBadge status={node.status} />
                       <button
                         onClick={(e) => { e.preventDefault(); handleDelete(node.id); }}
@@ -874,15 +970,30 @@ export default function AdminNodes() {
                       <ArrowRight className="h-3.5 w-3.5" />
                       View Details
                     </div>
-                    {node.registrationToken && (
+                    <div className="flex items-center gap-1.5">
                       <button
-                        onClick={(e) => { e.preventDefault(); setInstallNode(node); }}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-white/3 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground transition-colors"
+                        onClick={(e) => { e.preventDefault(); pingNode(node.id); }}
+                        disabled={pingMap[node.id]?.status === "checking"}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-white/3 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground transition-colors disabled:opacity-50"
+                        data-testid={`button-ping-node-${node.id}`}
+                        title="Test connectivity"
                       >
-                        <Download className="h-3.5 w-3.5" />
-                        Install Command
+                        {pingMap[node.id]?.status === "checking"
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Activity className="h-3.5 w-3.5" />
+                        }
+                        Ping
                       </button>
-                    )}
+                      {node.registrationToken && (
+                        <button
+                          onClick={(e) => { e.preventDefault(); setInstallNode(node); }}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-white/3 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground transition-colors"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Install Command
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </Link>
               );
