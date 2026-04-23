@@ -27,15 +27,14 @@ const SETUP_STEPS = [
   },
   {
     n: "2",
-    title: "Install Wings (daemon)",
-    desc: "Run the Wings installer on your node machine.",
-    code: "curl -sL https://raw.githubusercontent.com/pterodactyl/wings/release/install.sh | bash",
+    title: "Prepare EGH Node",
+    desc: "Create the node in EGH Panel to generate the EGH Node install command for your target machine.",
     done: false,
   },
   {
     n: "3",
-    title: "Register the node here",
-    desc: "Click \"Add Node\" above and enter the node's FQDN or IP address.",
+    title: "Register and connect",
+    desc: "Click \"Add Node\" above, enter the server details, then run the generated EGH Node install command on the target machine.",
     done: false,
   },
 ];
@@ -66,7 +65,6 @@ export default function AdminNodes() {
   return (
     <AdminLayout title="Nodes">
       <div className="space-y-4">
-        {/* Page header */}
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground">Nodes</h2>
@@ -96,15 +94,13 @@ export default function AdminNodes() {
                   <Skeleton className="h-5 w-16 rounded-md" />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {[1,2,3].map(j => <Skeleton key={j} className="h-14 rounded-lg" />)}
+                  {[1, 2, 3].map((j) => <Skeleton key={j} className="h-14 rounded-lg" />)}
                 </div>
               </div>
             ))}
           </div>
         ) : nodes.length === 0 ? (
-          /* ---- Setup guide empty state ---- */
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-            {/* Steps */}
             <div className="lg:col-span-3 rounded-xl border border-border/60 bg-card p-5 shadow-sm">
               <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-border/40">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10">
@@ -115,6 +111,7 @@ export default function AdminNodes() {
                   <p className="text-xs text-muted-foreground">Follow these steps to connect your first node</p>
                 </div>
               </div>
+
               <ol className="space-y-4">
                 {SETUP_STEPS.map((step) => (
                   <li key={step.n} className="flex gap-3">
@@ -124,16 +121,11 @@ export default function AdminNodes() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">{step.title}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{step.desc}</p>
-                      {step.code && (
-                        <div className="mt-2 flex items-start gap-2 rounded-lg border border-border/40 bg-black/40 px-3 py-2">
-                          <Terminal className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                          <code className="text-[11px] font-mono text-emerald-400 break-all">{step.code}</code>
-                        </div>
-                      )}
                     </div>
                   </li>
                 ))}
               </ol>
+
               <div className="mt-4 pt-4 border-t border-border/40">
                 <button
                   onClick={() => setShowCreate(true)}
@@ -146,14 +138,14 @@ export default function AdminNodes() {
               </div>
             </div>
 
-            {/* Info / tips */}
             <div className="lg:col-span-2 flex flex-col gap-3">
               <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">What is a node?</p>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  A node is a physical or virtual server that runs the Wings daemon. EGH Panel connects to Wings over HTTPS to deploy and manage game server containers on that machine.
+                  A node is a physical or virtual server that runs the EGH Node agent. EGH Panel connects to EGH Node over HTTPS to deploy and manage game server containers on that machine.
                 </p>
               </div>
+
               <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Requirements</p>
                 <ul className="space-y-2">
@@ -161,7 +153,7 @@ export default function AdminNodes() {
                     "Linux (Ubuntu 22.04+ recommended)",
                     "Docker Engine installed",
                     "Ports 443 & 8080 open",
-                    "Wings daemon installed",
+                    "EGH Node agent installed",
                   ].map((req) => (
                     <li key={req} className="flex items-start gap-2 text-xs text-muted-foreground">
                       <CheckCircle2 className="h-3.5 w-3.5 text-primary/60 shrink-0 mt-0.5" />
@@ -173,11 +165,9 @@ export default function AdminNodes() {
             </div>
           </div>
         ) : (
-          /* ---- Node cards ---- */
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {nodes.map((node: any) => (
               <div key={node.id} className="rounded-xl border border-border/60 bg-card p-4 shadow-sm" data-testid={`card-node-${node.id}`}>
-                {/* Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="min-w-0 flex-1 pr-3">
                     <div className="flex items-center gap-2">
@@ -207,12 +197,11 @@ export default function AdminNodes() {
                   </div>
                 </div>
 
-                {/* Stats row */}
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { icon: MemoryStick, label: "Memory",   value: formatMB(node.memoryTotal), color: "text-sky-400",     bg: "bg-sky-500/10" },
-                    { icon: HardDrive,   label: "Disk",     value: formatMB(node.diskTotal),   color: "text-emerald-400", bg: "bg-emerald-500/10" },
-                    { icon: Globe,       label: "Visibility", value: node.isPublic ? "Public" : "Private", color: "text-violet-400", bg: "bg-violet-500/10" },
+                    { icon: MemoryStick, label: "Memory", value: formatMB(node.memoryTotal), color: "text-sky-400", bg: "bg-sky-500/10" },
+                    { icon: HardDrive, label: "Disk", value: formatMB(node.diskTotal), color: "text-emerald-400", bg: "bg-emerald-500/10" },
+                    { icon: Globe, label: "Visibility", value: node.isPublic ? "Public" : "Private", color: "text-violet-400", bg: "bg-violet-500/10" },
                   ].map((stat) => (
                     <div key={stat.label} className="rounded-lg border border-border/40 bg-white/3 p-2.5">
                       <div className="flex items-center gap-1.5 mb-1.5">
@@ -263,8 +252,9 @@ function CreateNodeModal({ onClose, onSuccess }: { onClose: () => void; onSucces
       <div className="w-full max-w-lg rounded-xl border border-border/60 bg-card p-6 shadow-2xl">
         <div className="mb-5">
           <h3 className="text-base font-semibold text-foreground">Add New Node</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">Enter the connection details for your Wings daemon.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Enter the connection details for your EGH Node agent.</p>
         </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -276,6 +266,7 @@ function CreateNodeModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               <input value={form.fqdn} onChange={(e) => setForm({ ...form, fqdn: e.target.value })} className={inputClass} placeholder="node.example.com" required />
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Scheme</label>
@@ -285,10 +276,11 @@ function CreateNodeModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               </select>
             </div>
             <div>
-              <label className={labelClass}>Daemon Port</label>
+              <label className={labelClass}>Agent Port</label>
               <input type="number" value={form.daemonPort} onChange={(e) => setForm({ ...form, daemonPort: Number(e.target.value) })} className={inputClass} required />
             </div>
           </div>
+
           <div>
             <label className={labelClass}>Resources</label>
             <div className="grid grid-cols-2 gap-3">
@@ -302,6 +294,7 @@ function CreateNodeModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               </div>
             </div>
           </div>
+
           <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
             <button type="button" onClick={onClose} className="rounded-lg border border-border/60 px-4 py-2 text-sm text-muted-foreground hover:bg-white/5 transition-colors">
               Cancel
