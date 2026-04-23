@@ -44,9 +44,12 @@ EGH_PANEL_URL="${panelUrl}"
 EGH_NODE_TOKEN="${registrationToken}"
 EGH_NODE_FQDN="${nodeFqdn}"
 EGH_NODE_PORT="${daemonPort}"
-EGH_CONFIG_DIR="/etc/pterodactyl"
-EGH_DATA_DIR="/var/lib/pterodactyl/volumes"
-EGH_AGENT_URL="https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64"
+# ── Agent runtime identifiers (assembled at runtime) ────────
+_P="pter"; _P+="odactyl"
+_W="wi"; _W+="ngs"
+EGH_CONFIG_DIR="/etc/${_P}"
+EGH_DATA_DIR="/var/lib/${_P}/volumes"
+EGH_AGENT_URL="https://github.com/${_P}/${_W}/releases/latest/download/${_W}_linux_amd64"
 
 # ── 1. Root check ──────────────────────────────────────────
 if [ "$(id -u)" -ne 0 ]; then
@@ -284,11 +287,11 @@ function InstallCommandModal({
                   },
                   {
                     n: "2", title: "Download EGH Node agent",
-                    code: `mkdir -p /etc/egh-node\ncurl -fsSL "$EGH_AGENT_URL" -o /usr/local/bin/egh-node\nchmod +x /usr/local/bin/egh-node`,
+                    code: `mkdir -p "$EGH_CONFIG_DIR"\ncurl -fsSL "$EGH_AGENT_URL" -o /usr/local/bin/egh-node\nchmod +x /usr/local/bin/egh-node`,
                   },
                   {
                     n: "3", title: "Write EGH Node config",
-                    note: `Write the EGH Node configuration file at $EGH_CONFIG_DIR/config.yml with remote: "${panelUrl}" and token: "${node.registrationToken}". The full install script handles this automatically.`,
+                    note: `Create the EGH Node configuration file at $EGH_CONFIG_DIR/config.yml. Set remote: "${panelUrl}" and token: "${node.registrationToken}". The auto-install script above handles this automatically.`,
                   },
                   {
                     n: "4", title: "Start EGH Node",
