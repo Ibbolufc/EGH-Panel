@@ -46,7 +46,7 @@ EGH_NODE_FQDN="${nodeFqdn}"
 EGH_NODE_PORT="${daemonPort}"
 EGH_CONFIG_DIR="/etc/egh-node"
 EGH_DATA_DIR="/var/lib/egh-node/volumes"
-EGH_AGENT_URL="https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64"
+EGH_AGENT_URL="${panelUrl}/api/download/egh-node"
 
 # ── 1. Root check ──────────────────────────────────────────
 if [ "$(id -u)" -ne 0 ]; then
@@ -71,8 +71,6 @@ fi
 # ── 3. Download EGH Node agent ─────────────────────────────
 echo "[3/5] Downloading EGH Node agent..."
 mkdir -p "\${EGH_CONFIG_DIR}" /var/log/egh-node
-# Compatibility symlink required by EGH Node runtime — do not remove
-ln -s "\${EGH_CONFIG_DIR}" /etc/pterodactyl 2>/dev/null || true
 curl -fsSL "\${EGH_AGENT_URL}" -o /usr/local/bin/egh-node
 chmod +x /usr/local/bin/egh-node
 
@@ -110,7 +108,7 @@ User=root
 WorkingDirectory=\${EGH_CONFIG_DIR}
 LimitNOFILE=4096
 PIDFile=/var/run/egh-node/daemon.pid
-ExecStart=/usr/local/bin/egh-node
+ExecStart=/usr/local/bin/egh-node --config \${EGH_CONFIG_DIR}/config.yml
 Restart=on-failure
 StartLimitInterval=600
 StandardOutput=journal
