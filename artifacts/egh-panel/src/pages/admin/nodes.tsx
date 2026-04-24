@@ -604,6 +604,7 @@ function ConnectivityBadge({ ping }: { ping: PingResult }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function AdminNodes() {
+  const [, setLocation] = useLocation();
   const [showCreate, setShowCreate] = useState(false);
   const [installNode, setInstallNode] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -879,8 +880,10 @@ export default function AdminNodes() {
                         <p className="text-[11px] text-amber-400/60">Run the EGH Node install command on this machine to bring it online.</p>
                       </div>
                       <button
-                        onClick={(e) => { e.preventDefault(); handleOpenInstall(node); }}
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); setLocation(`/admin/nodes/${node.id}?tab=install`); }}
                         className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-amber-500/15 border border-amber-500/25 px-2.5 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/25 transition-colors"
+                        data-testid={`button-view-install-pending-${node.id}`}
                       >
                         <Terminal className="h-3.5 w-3.5" />
                         View Command
