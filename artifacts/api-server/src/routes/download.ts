@@ -1,19 +1,16 @@
 import { Router } from "express";
 import https from "https";
 import http from "http";
-import { eq } from "drizzle-orm";
-import { db, panelSettingsTable } from "@workspace/db";
 
 const router: Router = Router();
 
-const VERSION_KEY = "egh_node_version";
-
 /**
  * Pinned EGH Node (Wings) binary version.
- * To upgrade, change this constant and redeploy — no runtime DB change needed.
- * This is intentionally hardcoded so version bumps require a deliberate code change.
+ * Changing this constant and redeploying is the only way to update the
+ * binary version served to nodes — runtime/DB overrides are intentionally
+ * not supported so that upgrades require a deliberate code change.
  */
-const PINNED_VERSION = "v1.11.13";
+export const PINNED_VERSION = "v1.11.13";
 
 const ALLOWED_REDIRECT_HOSTS = [
   "github.com",
@@ -24,29 +21,8 @@ const ALLOWED_REDIRECT_HOSTS = [
 
 const DOWNLOAD_TIMEOUT_MS = 30_000;
 
-let _cachedVersion: string | null = null;
-let _cacheExpiresAt = 0;
-const CACHE_TTL_MS = 60_000;
-
-async function getConfiguredVersion(): Promise<string> {
-  const now = Date.now();
-  if (_cachedVersion !== null && now < _cacheExpiresAt) {
-    return _cachedVersion;
-  }
-  const rows = await db
-    .select()
-    .from(panelSettingsTable)
-    .where(eq(panelSettingsTable.key, VERSION_KEY))
-    .limit(1);
-  const version = rows[0]?.value ?? PINNED_VERSION;
-  _cachedVersion = version;
-  _cacheExpiresAt = now + CACHE_TTL_MS;
-  return version;
-}
-
-function buildWingsUrl(version: string): string {
-  const safe = version.replace(/[^a-z0-9._-]/gi, "") || PINNED_VERSION;
-  return `https://github.com/pterodactyl/wings/releases/download/${safe}/wings_linux_amd64`;
+function buildWingsUrl(): string {
+  return `https://github.com/pterodactyl/wings/releases/download/${PINNED_VERSION}/wings_linux_amd64`;
 }
 
 function isAllowedHost(url: string): boolean {
@@ -124,15 +100,8 @@ function fetchWithRedirects(
   });
 }
 
-router.get("/download/egh-node", async (_req, res): Promise<void> => {
-  const version = await getConfiguredVersion();
-  const url = buildWingsUrl(version);
-  fetchWithRedirects(url, res);
+router.get("/download/egh-node", (_req, res): void => {
+  fetchWithRedirects(buildWingsUrl(), res);
 });
-
-export function invalidateVersionCache(): void {
-  _cachedVersion = null;
-  _cacheExpiresAt = 0;
-}
 
 export default router;
