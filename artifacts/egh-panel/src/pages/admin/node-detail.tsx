@@ -420,7 +420,12 @@ function CopyBtn({ text, label = "Copy", size = "sm" }: { text: string; label?: 
 export default function NodeDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
-  const [tab, setTab] = useState<TabId>("overview");
+  const initialTab: TabId = (() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    const valid: TabId[] = ["overview", "allocations", "servers", "install", "settings"];
+    return valid.includes(t as TabId) ? (t as TabId) : "overview";
+  })();
+  const [tab, setTab] = useState<TabId>(initialTab);
   const [deletingAllocId, setDeletingAllocId] = useState<number | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [regenPending, setRegenPending] = useState(false);

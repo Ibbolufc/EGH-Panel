@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { useListNodes, useCreateNode, useDeleteNode } from "@workspace/api-client-react";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -293,8 +293,9 @@ function InstallCommandModal({
 
 // ── Two-step Add Node modal ───────────────────────────────────────────────────
 function AddNodeModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [step, setStep] = useState<"form" | "install">(  "form");
+  const [step, setStep] = useState<"form" | "install">("form");
   const [createdNode, setCreatedNode] = useState<any>(null);
+  const [, setLocation] = useLocation();
   const [form, setForm] = useState({
     name: "", location: "", fqdn: "", scheme: "https", daemonPort: 8080,
     isPublic: true, memoryTotal: 4096, diskTotal: 50000, notes: "",
@@ -358,9 +359,18 @@ function AddNodeModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
             <InstallCommandContent node={createdNode} />
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-border/40 px-5 py-3.5">
+          <div className="flex items-center justify-between border-t border-border/40 px-5 py-3.5 gap-3">
             <button onClick={onClose} className="rounded-lg border border-border/60 px-4 py-2 text-sm text-muted-foreground hover:bg-white/5 transition-colors">
-              Close
+              Done
+            </button>
+            <button
+              onClick={() => { onClose(); setLocation(`/admin/nodes/${createdNode.id}?tab=install`); }}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
+              data-testid="button-view-install-command"
+            >
+              <Terminal className="h-4 w-4" />
+              View Install Command
+              <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
