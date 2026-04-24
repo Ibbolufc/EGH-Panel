@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
-import { useGetEgg, useUpdateEgg, useUpdateEggVariable } from "@workspace/api-client-react";
+import { useGetEgg, useUpdateEgg } from "@workspace/api-client-react";
 import type { EggDetail, EggVariable } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -78,7 +78,6 @@ export default function AdminEggDetail() {
     data: EggDetail | undefined; isLoading: boolean; refetch: () => void;
   };
   const updateEgg = useUpdateEgg();
-  const updateEggVariable = useUpdateEggVariable();
 
   useEffect(() => {
     function onPop() { setTab(getTabFromSearch()); }
@@ -151,15 +150,17 @@ export default function AdminEggDetail() {
 
   async function handleVarSave(varId: number) {
     try {
-      await updateEggVariable.mutateAsync({
-        eggId,
-        varId,
+      await updateEgg.mutateAsync({
+        id: eggId,
         data: {
-          name: varForm.name || undefined,
-          defaultValue: varForm.defaultValue,
-          userViewable: varForm.userViewable,
-          userEditable: varForm.userEditable,
-          rules: varForm.rules,
+          variables: [{
+            id: varId,
+            name: varForm.name || undefined,
+            defaultValue: varForm.defaultValue,
+            userViewable: varForm.userViewable,
+            userEditable: varForm.userEditable,
+            rules: varForm.rules,
+          }],
         },
       });
       refetch();
@@ -473,17 +474,17 @@ export default function AdminEggDetail() {
                             <button
                               type="button"
                               onClick={() => handleVarSave(v.id)}
-                              disabled={updateEggVariable.isPending}
+                              disabled={updateEgg.isPending}
                               className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50"
                               data-testid={`button-save-var-${v.id}`}
                             >
-                              {updateEggVariable.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                              {updateEggVariable.isPending ? "Saving…" : "Save"}
+                              {updateEgg.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                              {updateEgg.isPending ? "Saving…" : "Save"}
                             </button>
                             <button
                               type="button"
                               onClick={() => setEditingVarId(null)}
-                              disabled={updateEggVariable.isPending}
+                              disabled={updateEgg.isPending}
                               className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
                             >
                               <X className="h-3 w-3" />

@@ -190,6 +190,16 @@ export interface CreateEggBody {
   configFiles?: string;
 }
 
+export interface UpdateEggVariableItem {
+  id: number;
+  name?: string;
+  description?: string;
+  defaultValue?: string;
+  userViewable?: boolean;
+  userEditable?: boolean;
+  rules?: string;
+}
+
 export interface UpdateEggBody {
   nestId?: number;
   name?: string;
@@ -198,15 +208,7 @@ export interface UpdateEggBody {
   startup?: string;
   installScript?: string;
   configFiles?: string;
-}
-
-export interface UpdateEggVariableBody {
-  name?: string;
-  description?: string;
-  defaultValue?: string;
-  userViewable?: boolean;
-  userEditable?: boolean;
-  rules?: string;
+  variables?: UpdateEggVariableItem[];
 }
 
 /**

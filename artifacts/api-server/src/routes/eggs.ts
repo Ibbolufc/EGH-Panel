@@ -63,12 +63,23 @@ const CreateEggBody = z.object({
   installScript: z.string().optional(),
 });
 
+const UpdateEggVariableItem = z.object({
+  id: z.number().int().positive(),
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().optional(),
+  defaultValue: z.string().optional(),
+  userViewable: z.boolean().optional(),
+  userEditable: z.boolean().optional(),
+  rules: z.string().optional(),
+});
+
 const UpdateEggBody = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().optional(),
   dockerImage: z.string().min(1).optional(),
   startup: z.string().min(1).optional(),
   installScript: z.string().optional(),
+  variables: z.array(UpdateEggVariableItem).optional(),
 });
 
 function parsePterodactylEgg(raw: unknown) {
@@ -260,52 +271,48 @@ router.patch("/eggs/:id", requireAdmin, validateBody(UpdateEggBody), asyncHandle
   const id = parseIntParam(req, res, "id");
   if (id === null) return;
 
-  const [egg] = await db.update(eggsTable).set(req.body as z.infer<typeof UpdateEggBody>).where(eq(eggsTable.id, id)).returning();
+  const { variables, ...eggFields } = req.body as z.infer<typeof UpdateEggBody>;
+
+  const hasEggFields = Object.keys(eggFields).length > 0;
+  let egg: typeof eggsTable.$inferSelect | undefined;
+
+  if (hasEggFields) {
+    const [updated] = await db.update(eggsTable).set(eggFields).where(eq(eggsTable.id, id)).returning();
+    egg = updated;
+  } else {
+    const [found] = await db.select().from(eggsTable).where(eq(eggsTable.id, id));
+    egg = found;
+  }
+
   if (!egg) {
     res.status(404).json({ error: "Egg not found" });
     return;
   }
 
-  const [nest] = await db.select({ name: nestsTable.name }).from(nestsTable).where(eq(nestsTable.id, egg.nestId));
-  res.json({ ...egg, nestName: nest?.name ?? "Unknown" });
-}));
-
-const UpdateEggVariableBody = z.object({
-  name: z.string().min(1).max(255).optional(),
-  description: z.string().optional(),
-  defaultValue: z.string().optional(),
-  userViewable: z.boolean().optional(),
-  userEditable: z.boolean().optional(),
-  rules: z.string().optional(),
-});
-
-router.patch("/eggs/:id/variables/:varId", requireAdmin, validateBody(UpdateEggVariableBody), asyncHandler(async (req, res) => {
-  const id = parseIntParam(req, res, "id");
-  if (id === null) return;
-  const varId = parseIntParam(req, res, "varId");
-  if (varId === null) return;
-
-  const body = req.body as z.infer<typeof UpdateEggVariableBody>;
-  const update: Record<string, unknown> = {};
-  if (body.name !== undefined) update.name = body.name;
-  if (body.description !== undefined) update.description = body.description;
-  if (body.defaultValue !== undefined) update.defaultValue = body.defaultValue;
-  if (body.userViewable !== undefined) update.userViewable = String(body.userViewable);
-  if (body.userEditable !== undefined) update.userEditable = String(body.userEditable);
-  if (body.rules !== undefined) update.rules = body.rules;
-
-  const [updated] = await db
-    .update(eggVariablesTable)
-    .set(update)
-    .where(and(eq(eggVariablesTable.id, varId), eq(eggVariablesTable.eggId, id)))
-    .returning();
-
-  if (!updated) {
-    res.status(404).json({ error: "Variable not found" });
-    return;
+  if (variables && variables.length > 0) {
+    for (const v of variables) {
+      const { id: varId, userViewable, userEditable, ...rest } = v;
+      const update: Record<string, unknown> = { ...rest };
+      if (userViewable !== undefined) update.userViewable = String(userViewable);
+      if (userEditable !== undefined) update.userEditable = String(userEditable);
+      await db
+        .update(eggVariablesTable)
+        .set(update)
+        .where(and(eq(eggVariablesTable.id, varId), eq(eggVariablesTable.eggId, id)));
+    }
   }
 
-  res.json({ ...updated, userViewable: updated.userViewable === "true", userEditable: updated.userEditable === "true" });
+  const [nest] = await db.select({ name: nestsTable.name }).from(nestsTable).where(eq(nestsTable.id, egg.nestId));
+  const updatedVars = await db.select().from(eggVariablesTable).where(eq(eggVariablesTable.eggId, id));
+  res.json({
+    ...egg,
+    nestName: nest?.name ?? "Unknown",
+    variables: updatedVars.map((v) => ({
+      ...v,
+      userViewable: v.userViewable === "true",
+      userEditable: v.userEditable === "true",
+    })),
+  });
 }));
 
 router.delete("/eggs/:id", requireAdmin, asyncHandler(async (req, res) => {
