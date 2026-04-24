@@ -27,7 +27,30 @@ interface NodeDetailFull extends NodeDetail {
   location?: string | null;
   notes?: string | null;
   registrationToken?: string | null;
+  registrationTokenExpiresAt?: string | null;
   daemonToken?: string | null;
+}
+
+function TokenExpiryBadge({ expiresAt }: { expiresAt?: string | null }) {
+  if (!expiresAt) return null;
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  const expired = ms <= 0;
+  const hours = Math.floor(Math.abs(ms) / 3600000);
+  const mins = Math.floor((Math.abs(ms) % 3600000) / 60000);
+  const soon = !expired && ms < 4 * 3600000;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
+      expired ? "bg-red-500/15 text-red-400" :
+      soon    ? "bg-amber-500/15 text-amber-400" :
+                "bg-emerald-500/10 text-emerald-400"
+    }`}>
+      {expired
+        ? `Expired ${hours}h ${mins}m ago`
+        : soon
+        ? `Expires in ${hours}h ${mins}m`
+        : `Expires in ${hours}h`}
+    </span>
+  );
 }
 
 interface NodeUpdateForm {
@@ -885,7 +908,10 @@ export default function NodeDetailPage() {
 
                 {/* Registration token display */}
                 <div className="mb-4 rounded-lg border border-border/50 bg-white/2 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">Registration Token</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Registration Token</p>
+                    <TokenExpiryBadge expiresAt={node.registrationTokenExpiresAt} />
+                  </div>
                   {token ? (
                     <div className="flex items-center gap-2">
                       <code className="text-xs text-foreground font-mono break-all flex-1">{token}</code>

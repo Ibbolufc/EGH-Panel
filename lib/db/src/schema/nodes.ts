@@ -20,6 +20,7 @@ export const nodesTable = pgTable("nodes", {
   status: nodeStatusEnum("status").notNull().default("pending"),
   daemonToken: text("daemon_token"),
   registrationToken: text("registration_token"),
+  registrationTokenExpiresAt: timestamp("registration_token_expires_at", { withTimezone: true }),
   notes: text("notes"),
   lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

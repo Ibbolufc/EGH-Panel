@@ -12,6 +12,13 @@ function generateRegistrationToken(): string {
   return "reg_" + randomBytes(24).toString("hex");
 }
 
+/** Token validity window — 48 hours from generation / regen */
+const TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
+
+function tokenExpiresAt(): Date {
+  return new Date(Date.now() + TOKEN_TTL_MS);
+}
+
 function nodeWithMeta(node: any, serverCount = 0, allocationCount = 0) {
   return {
     ...node,
@@ -38,6 +45,7 @@ router.get("/nodes", requireAdmin, async (req, res): Promise<void> => {
       diskOverallocate: nodesTable.diskOverallocate,
       status: nodesTable.status,
       registrationToken: nodesTable.registrationToken,
+      registrationTokenExpiresAt: nodesTable.registrationTokenExpiresAt,
       notes: nodesTable.notes,
       createdAt: nodesTable.createdAt,
     })
@@ -75,6 +83,7 @@ router.post("/nodes", requireAdmin, async (req, res): Promise<void> => {
       ...extra,
       status: "pending",
       registrationToken,
+      registrationTokenExpiresAt: tokenExpiresAt(),
     })
     .returning();
 
@@ -167,7 +176,15 @@ router.get("/nodes/:id/install.sh", installScriptLimiter, async (req, res): Prom
 
   if (!node.registrationToken || node.registrationToken !== token) {
     res.status(403).setHeader("Content-Type", "text/x-shellscript").send(
-      "#!/usr/bin/env bash\n# Error: invalid or expired token\necho 'Error: invalid or expired token — regenerate it from the EGH Panel' >&2\nexit 1\n"
+      "#!/usr/bin/env bash\n# Error: invalid token\necho 'Error: invalid token — regenerate it from the EGH Panel' >&2\nexit 1\n"
+    );
+    return;
+  }
+
+  // Reject tokens that have passed their 48-hour expiry window.
+  if (node.registrationTokenExpiresAt && node.registrationTokenExpiresAt < new Date()) {
+    res.status(403).setHeader("Content-Type", "text/x-shellscript").send(
+      "#!/usr/bin/env bash\n# Error: token expired\necho 'Error: install token has expired — regenerate it from the EGH Panel' >&2\nexit 1\n"
     );
     return;
   }
@@ -289,10 +306,11 @@ router.post("/nodes/:id/regen-token", requireAdmin, async (req, res): Promise<vo
   const id = parseInt(rawId, 10);
 
   const newToken = generateRegistrationToken();
+  const expiresAt = tokenExpiresAt();
 
   const [node] = await db
     .update(nodesTable)
-    .set({ registrationToken: newToken, status: "pending" })
+    .set({ registrationToken: newToken, registrationTokenExpiresAt: expiresAt, status: "pending" })
     .where(eq(nodesTable.id, id))
     .returning();
 
@@ -301,7 +319,7 @@ router.post("/nodes/:id/regen-token", requireAdmin, async (req, res): Promise<vo
     return;
   }
 
-  res.json({ registrationToken: newToken, status: node.status });
+  res.json({ registrationToken: newToken, registrationTokenExpiresAt: expiresAt, status: node.status });
 });
 
 // Test connection — admin triggers a live reachability check against the daemon

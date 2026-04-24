@@ -167,7 +167,7 @@ describe("GET /api/nodes/:id — node detail (Install tab data source)", () => {
 
 // ── Create Node API — data surface for Create Node success step ────────────────
 describe("POST /api/nodes — create node (Create Node success step data source)", () => {
-  it("returns a registrationToken in the create response so the success step can render the one-liner", async () => {
+  it("returns registrationToken and registrationTokenExpiresAt (~48h) in create response", async () => {
     const res = await fetch(`${BASE}/api/nodes`, {
       method: "POST",
       headers: {
@@ -196,11 +196,67 @@ describe("POST /api/nodes — create node (Create Node success step data source)
         created.registrationToken.startsWith("reg_"),
       "registrationToken must be returned in create response for the success step one-liner"
     );
+    assert.ok(
+      typeof created.registrationTokenExpiresAt === "string",
+      "registrationTokenExpiresAt must be returned so the UI can show expiry"
+    );
+    const expiryMs = new Date(created.registrationTokenExpiresAt).getTime() - Date.now();
+    assert.ok(expiryMs > 47 * 3600000, "Token expiry must be approximately 48h in the future");
+    assert.ok(expiryMs < 49 * 3600000, "Token expiry must not exceed 48h by more than an hour");
 
     // Clean up the transient node created for this test
     await fetch(`${BASE}/api/nodes/${created.id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${jwtToken}` },
     });
+  });
+});
+
+// ── Token expiry feature ────────────────────────────────────────────────────────
+describe("Token expiry — regen-token and install.sh expiry enforcement", () => {
+  it("regen-token returns registrationTokenExpiresAt ~48h in the future", async () => {
+    const res = await fetch(`${BASE}/api/nodes/${nodeId}/regen-token`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${jwtToken}` },
+    });
+    assert.equal(res.status, 200, "Regen must return 200");
+    const data = await res.json();
+
+    assert.ok(
+      typeof data.registrationTokenExpiresAt === "string",
+      "registrationTokenExpiresAt must be in the regen response"
+    );
+    const expiryMs = new Date(data.registrationTokenExpiresAt).getTime() - Date.now();
+    assert.ok(expiryMs > 47 * 3600000, "Expiry must be approximately 48h from now");
+    assert.ok(expiryMs < 49 * 3600000, "Expiry must not be more than ~48h");
+
+    // Update shared token for later tests (regen invalidates the old token)
+    registrationToken = data.registrationToken;
+  });
+
+  it("node list includes registrationTokenExpiresAt so the UI can show expiry badges", async () => {
+    const res = await fetch(`${BASE}/api/nodes`, {
+      headers: { Authorization: `Bearer ${jwtToken}` },
+    });
+    assert.equal(res.status, 200, "Nodes list must return 200");
+    const nodes = await res.json();
+    const node = nodes.find((n) => n.id === nodeId);
+    assert.ok(node, "Test node must appear in the list");
+    assert.ok(
+      typeof node.registrationTokenExpiresAt === "string",
+      "registrationTokenExpiresAt must be present in the nodes list for UI expiry badges"
+    );
+  });
+
+  it("node detail includes registrationTokenExpiresAt for the Install tab badge", async () => {
+    const res = await fetch(`${BASE}/api/nodes/${nodeId}`, {
+      headers: { Authorization: `Bearer ${jwtToken}` },
+    });
+    assert.equal(res.status, 200, "Node detail must return 200");
+    const node = await res.json();
+    assert.ok(
+      typeof node.registrationTokenExpiresAt === "string",
+      "registrationTokenExpiresAt must be in node detail for the Install tab badge"
+    );
   });
 });

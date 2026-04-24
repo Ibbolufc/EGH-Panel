@@ -240,7 +240,21 @@ function InstallCommandModal({
               <code className="text-xs text-foreground break-all">{panelUrl}</code>
             </div>
             <div className="rounded-lg border border-border/50 bg-white/2 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">Registration Token</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Registration Token</p>
+                {node.registrationTokenExpiresAt && (() => {
+                  const ms = new Date(node.registrationTokenExpiresAt).getTime() - Date.now();
+                  const expired = ms <= 0;
+                  const hours = Math.floor(Math.abs(ms) / 3600000);
+                  const mins = Math.floor((Math.abs(ms) % 3600000) / 60000);
+                  const soon = !expired && ms < 4 * 3600000;
+                  return (
+                    <span className={`inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full ${expired ? "bg-red-500/15 text-red-400" : soon ? "bg-amber-500/15 text-amber-400" : "bg-emerald-500/10 text-emerald-400"}`}>
+                      {expired ? `Expired ${hours}h ${mins}m ago` : soon ? `Expires in ${hours}h ${mins}m` : `Expires in ${hours}h`}
+                    </span>
+                  );
+                })()}
+              </div>
               <div className="flex items-center gap-2">
                 <code className="text-xs text-foreground truncate flex-1">{node.registrationToken ?? "—"}</code>
                 {node.registrationToken && <CopyButton text={node.registrationToken} size="xs" />}
@@ -670,6 +684,13 @@ export default function AdminNodes() {
   async function handleRegenToken(nodeId: number) {
     const res = await fetch(`/api/nodes/${nodeId}/regen-token`, { method: "POST", headers: authHeaders() });
     if (!res.ok) throw new Error("Failed");
+    const data = await res.json();
+    // Update the modal's live node state so the new token + expiry are reflected immediately.
+    setInstallNode((prev: any) =>
+      prev?.id === nodeId
+        ? { ...prev, registrationToken: data.registrationToken, registrationTokenExpiresAt: data.registrationTokenExpiresAt }
+        : prev
+    );
     refetch();
   }
 
@@ -681,8 +702,8 @@ export default function AdminNodes() {
     try {
       const res = await fetch(`/api/nodes/${nodeForInstall.id}/regen-token`, { method: "POST", headers: authHeaders() });
       if (!res.ok) throw new Error("Failed to generate token");
-      const { registrationToken } = await res.json();
-      setInstallNode({ ...nodeForInstall, registrationToken });
+      const { registrationToken, registrationTokenExpiresAt } = await res.json();
+      setInstallNode({ ...nodeForInstall, registrationToken, registrationTokenExpiresAt });
       refetch();
     } catch {
       toast({ title: "Failed to generate install command", variant: "destructive" });
