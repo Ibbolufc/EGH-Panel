@@ -146,7 +146,7 @@ router.patch("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
 router.get("/nodes/:id/install.sh", async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
-  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  const token = typeof req.query.token === "string" ? req.query.token : "";
 
   if (!token) {
     res.status(401).setHeader("Content-Type", "text/x-shellscript").send(
