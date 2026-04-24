@@ -891,7 +891,25 @@ export default function NodeDetailPage() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Install Script</p>
-                      <CopyBtn text={script} label="Copy full script" />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const blob = new Blob([script], { type: "text/x-shellscript" });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `install-egh-node-${node.id}.sh`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-white/5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors"
+                          data-testid="button-download-install-script"
+                        >
+                          <Download className="h-3 w-3" />
+                          Download .sh
+                        </button>
+                        <CopyBtn text={script} label="Copy full script" />
+                      </div>
                     </div>
                     <div className="relative overflow-hidden rounded-lg border border-border/40 bg-[hsl(225,20%,4%)]">
                       <div className="flex items-center justify-between border-b border-border/30 px-3 py-2">
