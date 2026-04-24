@@ -893,6 +893,7 @@ export default function NodeDetailPage() {
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Install Script</p>
                       <div className="flex items-center gap-2">
                         <button
+                          type="button"
                           onClick={() => {
                             const blob = new Blob([script], { type: "text/x-shellscript" });
                             const url = URL.createObjectURL(blob);
