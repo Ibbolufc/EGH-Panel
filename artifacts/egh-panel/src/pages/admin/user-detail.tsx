@@ -73,11 +73,9 @@ export default function AdminUserDetail() {
   const { data: userData, isLoading, refetch } = useGetUser(userId);
   const user = userData as (UserDetail & { servers?: Server[] }) | undefined;
 
-  // Fetches up to 100 servers and filters client-side. If a user has >100 servers
-  // this will undercount — a server-side userId filter would be more robust.
-  const { data: serversData } = useListServers({ page: 1, limit: 100 });
-  const allServers: Server[] = serversData?.data ?? [];
-  const userServers = allServers.filter((s: Server) => s.userId === userId);
+  const { data: serversData } = useListServers({ userId, page: 1, limit: 100 });
+  const userServers: Server[] = serversData?.data ?? [];
+  const userServerCount = serversData?.total ?? 0;
 
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
@@ -139,7 +137,7 @@ export default function AdminUserDetail() {
   }
 
   async function handleDelete() {
-    const hasServers = userServers.length > 0;
+    const hasServers = userServerCount > 0;
     if (hasServers && deleteAction === "none") return;
     if (hasServers && deleteAction === "reassign" && !reassignToId) return;
     try {
@@ -222,7 +220,7 @@ export default function AdminUserDetail() {
           {/* Tab bar */}
           <div className="border-t border-border/40 px-4 py-2 flex items-center gap-1">
             <TabBtn active={tab === "overview"} onClick={() => handleTabChange("overview")} icon={User} label="Profile" />
-            <TabBtn active={tab === "servers"} onClick={() => handleTabChange("servers")} icon={ServerIcon} label={`Servers${userServers.length > 0 ? ` (${userServers.length})` : ""}`} />
+            <TabBtn active={tab === "servers"} onClick={() => handleTabChange("servers")} icon={ServerIcon} label={`Servers${userServerCount > 0 ? ` (${userServerCount})` : ""}`} />
           </div>
         </div>
 
@@ -314,7 +312,7 @@ export default function AdminUserDetail() {
                 <div className="flex items-center gap-2">
                   <ServerIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <dt className="text-xs text-muted-foreground w-24 shrink-0">Servers</dt>
-                  <dd className="text-sm font-medium text-foreground">{userServers.length}</dd>
+                  <dd className="text-sm font-medium text-foreground">{userServerCount}</dd>
                 </div>
               </dl>
             </div>
@@ -355,10 +353,10 @@ export default function AdminUserDetail() {
                   <p className="text-xs text-muted-foreground mt-1">This action cannot be undone. The user account will be permanently removed.</p>
                 </div>
 
-                {userServers.length > 0 && (
+                {userServerCount > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      What should happen to their {userServers.length} server{userServers.length !== 1 ? "s" : ""}?
+                      What should happen to their {userServerCount} server{userServerCount !== 1 ? "s" : ""}?
                     </p>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <button
@@ -375,7 +373,7 @@ export default function AdminUserDetail() {
                         <Trash2 className="h-4 w-4 mt-0.5 shrink-0 text-destructive" />
                         <div>
                           <p className="text-sm font-medium leading-tight">Delete all servers</p>
-                          <p className="text-xs mt-0.5 text-muted-foreground">Permanently remove all {userServers.length} server{userServers.length !== 1 ? "s" : ""}</p>
+                          <p className="text-xs mt-0.5 text-muted-foreground">Permanently remove all {userServerCount} server{userServerCount !== 1 ? "s" : ""}</p>
                         </div>
                       </button>
                       <button
@@ -431,8 +429,8 @@ export default function AdminUserDetail() {
                     onClick={handleDelete}
                     disabled={
                       deleteUser.isPending ||
-                      (userServers.length > 0 && deleteAction === "none") ||
-                      (userServers.length > 0 && deleteAction === "reassign" && !reassignToId)
+                      (userServerCount > 0 && deleteAction === "none") ||
+                      (userServerCount > 0 && deleteAction === "reassign" && !reassignToId)
                     }
                     data-testid="button-confirm-delete"
                     className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -459,9 +457,9 @@ export default function AdminUserDetail() {
         {tab === "servers" && (
           <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-border/40">
-              <SectionHeader icon={ServerIcon} title="Servers" subtitle={`${userServers.length} server${userServers.length !== 1 ? "s" : ""} assigned to this user`} />
+              <SectionHeader icon={ServerIcon} title="Servers" subtitle={`${userServerCount} server${userServerCount !== 1 ? "s" : ""} assigned to this user`} />
             </div>
-            {userServers.length === 0 ? (
+            {userServerCount === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <ServerIcon className="h-8 w-8 text-muted-foreground/40 mb-3" />
                 <p className="text-sm font-medium text-foreground">No servers</p>

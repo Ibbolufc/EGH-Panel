@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { eq, ilike, and, count, sql } from "drizzle-orm";
-import { db, usersTable, serversTable } from "@workspace/db";
+import { db, usersTable, serversTable, allocationsTable } from "@workspace/db";
 import { CreateUserBody, UpdateUserBody } from "@workspace/api-zod";
 import { requireAdmin, hashPassword } from "../lib/auth";
 import { logActivity } from "../lib/activity";
+import { buildProviderServer } from "../services/serverService";
+import { getProviderForNode } from "../providers/registry";
 
 const router: Router = Router();
 
@@ -163,46 +165,65 @@ router.delete("/users/:id", requireAdmin, async (req, res): Promise<void> => {
   }
 
   let deletedEmail = "";
-  await db.transaction(async (tx) => {
-    const userServers = await tx.select({ id: serversTable.id }).from(serversTable).where(eq(serversTable.userId, id));
+  try {
+    const userServers = await db
+      .select({ id: serversTable.id })
+      .from(serversTable)
+      .where(eq(serversTable.userId, id));
 
     if (userServers.length > 0) {
       if (serverAction === "delete") {
-        await tx.delete(serversTable).where(eq(serversTable.userId, id));
-      } else if (serverAction === "reassign" && reassignTo) {
-        const [targetUser] = await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, reassignTo));
-        if (!targetUser) {
-          throw Object.assign(new Error("Reassignment target user not found"), { statusCode: 400 });
+        for (const s of userServers) {
+          try {
+            const { providerServer } = await buildProviderServer(s.id);
+            await getProviderForNode(providerServer.node).deleteServer(providerServer);
+          } catch (providerErr) {
+            console.warn(`[users] Daemon delete failed for server ${s.id}: ${providerErr instanceof Error ? providerErr.message : String(providerErr)}`);
+          }
         }
-        await tx.update(serversTable).set({ userId: reassignTo }).where(eq(serversTable.userId, id));
-      } else {
-        throw Object.assign(
-          new Error("User has servers — choose to delete or reassign them before deleting the user"),
-          { statusCode: 409, serverCount: userServers.length },
-        );
-      }
-    }
 
-    const [user] = await tx.delete(usersTable).where(eq(usersTable.id, id)).returning({ email: usersTable.email });
-    if (!user) {
-      throw Object.assign(new Error("User not found"), { statusCode: 404 });
+        await db.transaction(async (tx) => {
+          for (const s of userServers) {
+            await tx.update(allocationsTable).set({ serverId: null }).where(eq(allocationsTable.serverId, s.id));
+          }
+          await tx.delete(serversTable).where(eq(serversTable.userId, id));
+          const [user] = await tx.delete(usersTable).where(eq(usersTable.id, id)).returning({ email: usersTable.email });
+          if (!user) throw Object.assign(new Error("User not found"), { statusCode: 404 });
+          deletedEmail = user.email;
+        });
+      } else if (serverAction === "reassign" && reassignTo) {
+        const [targetUser] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, reassignTo));
+        if (!targetUser) {
+          res.status(400).json({ error: "Reassignment target user not found" });
+          return;
+        }
+        await db.transaction(async (tx) => {
+          await tx.update(serversTable).set({ userId: reassignTo }).where(eq(serversTable.userId, id));
+          const [user] = await tx.delete(usersTable).where(eq(usersTable.id, id)).returning({ email: usersTable.email });
+          if (!user) throw Object.assign(new Error("User not found"), { statusCode: 404 });
+          deletedEmail = user.email;
+        });
+      } else {
+        res.status(409).json({ error: "User has servers — choose to delete or reassign them before deleting the user", serverCount: userServers.length });
+        return;
+      }
+    } else {
+      const [user] = await db.delete(usersTable).where(eq(usersTable.id, id)).returning({ email: usersTable.email });
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      deletedEmail = user.email;
     }
-    deletedEmail = user.email;
-  }).catch((err: unknown) => {
-    const e = err as { statusCode?: number; serverCount?: number; message?: string };
-    if (e.statusCode === 409) {
-      res.status(409).json({ error: e.message, serverCount: e.serverCount });
-    } else if (e.statusCode === 400) {
-      res.status(400).json({ error: e.message });
-    } else if (e.statusCode === 404) {
-      res.status(404).json({ error: e.message });
+  } catch (err: unknown) {
+    const e = err as { statusCode?: number; message?: string };
+    if (e.statusCode === 404) {
+      res.status(404).json({ error: e.message ?? "User not found" });
     } else {
       res.status(500).json({ error: "Failed to delete user" });
     }
-    throw err;
-  });
-
-  if (res.headersSent) return;
+    return;
+  }
 
   await logActivity({
     req,
