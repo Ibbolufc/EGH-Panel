@@ -16,6 +16,7 @@
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { execSync } from "node:child_process";
 
 const BASE = `http://localhost:${process.env.PORT ?? 8080}`;
 const ADMIN = { email: "admin@eghpanel.com", password: "admin123" };
@@ -258,5 +259,32 @@ describe("Token expiry — regen-token and install.sh expiry enforcement", () =>
       typeof node.registrationTokenExpiresAt === "string",
       "registrationTokenExpiresAt must be in node detail for the Install tab badge"
     );
+  });
+
+  it("install.sh returns shell-safe 403 when the token has expired", async () => {
+    const dbUrl = process.env.DATABASE_URL;
+    assert.ok(dbUrl, "DATABASE_URL must be set for the expired-token test");
+
+    const psql = (sql) =>
+      execSync(`psql "${dbUrl}" -c "${sql.replace(/"/g, '\\"')}"`, { stdio: "pipe" });
+
+    try {
+      // Backdate the token expiry 1 second into the past so the server rejects it
+      psql(`UPDATE nodes SET registration_token_expires_at = NOW() - INTERVAL '1 second' WHERE id = ${nodeId}`);
+
+      const res = await fetch(
+        `${BASE}/api/nodes/${nodeId}/install.sh?token=${registrationToken}`
+      );
+      assert.equal(res.status, 403, "Expired token must return HTTP 403");
+      const body = await res.text();
+      assert.ok(body.includes("exit 1"), "Error body must include 'exit 1' for shell safety");
+      assert.ok(
+        body.toLowerCase().includes("expired"),
+        "Error body must mention 'expired' so sysadmins know to regen the token"
+      );
+    } finally {
+      // Restore a valid 48h expiry so remaining tests using this token still work
+      psql(`UPDATE nodes SET registration_token_expires_at = NOW() + INTERVAL '48 hours' WHERE id = ${nodeId}`);
+    }
   });
 });
