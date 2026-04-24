@@ -200,6 +200,15 @@ export interface UpdateEggBody {
   configFiles?: string;
 }
 
+export interface UpdateEggVariableBody {
+  name?: string;
+  description?: string;
+  defaultValue?: string;
+  userViewable?: boolean;
+  userEditable?: boolean;
+  rules?: string;
+}
+
 /**
  * Raw Pterodactyl egg JSON object
  */

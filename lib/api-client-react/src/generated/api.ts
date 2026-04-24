@@ -1728,6 +1728,90 @@ export const useUpdateEgg = <
 };
 
 /**
+ * @summary Update egg variable (admin only)
+ */
+export const getUpdateEggVariableUrl = (eggId: number, varId: number) => {
+  return `/api/eggs/${eggId}/variables/${varId}`;
+};
+
+export const updateEggVariable = async (
+  eggId: number,
+  varId: number,
+  updateEggVariableBody: UpdateEggVariableBody,
+  options?: RequestInit,
+): Promise<EggVariable> => {
+  return customFetch<EggVariable>(getUpdateEggVariableUrl(eggId, varId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateEggVariableBody),
+  });
+};
+
+export const getUpdateEggVariableMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEggVariable>>,
+    TError,
+    { eggId: number; varId: number; data: BodyType<UpdateEggVariableBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateEggVariable>>,
+  TError,
+  { eggId: number; varId: number; data: BodyType<UpdateEggVariableBody> },
+  TContext
+> => {
+  const mutationKey = ["updateEggVariable"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateEggVariable>>,
+    { eggId: number; varId: number; data: BodyType<UpdateEggVariableBody> }
+  > = (props) => {
+    const { eggId, varId, data } = props ?? {};
+    return updateEggVariable(eggId, varId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateEggVariableMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateEggVariable>>
+>;
+export type UpdateEggVariableMutationBody = BodyType<UpdateEggVariableBody>;
+export type UpdateEggVariableMutationError = ErrorType<unknown>;
+
+export const useUpdateEggVariable = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEggVariable>>,
+    TError,
+    { eggId: number; varId: number; data: BodyType<UpdateEggVariableBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateEggVariable>>,
+  TError,
+  { eggId: number; varId: number; data: BodyType<UpdateEggVariableBody> },
+  TContext
+> => {
+  return useMutation(getUpdateEggVariableMutationOptions(options));
+};
+
+/**
  * @summary Delete egg (admin only)
  */
 export const getDeleteEggUrl = (id: number) => {

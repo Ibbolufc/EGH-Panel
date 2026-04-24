@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
-import { useGetEgg, useUpdateEgg } from "@workspace/api-client-react";
+import { useGetEgg, useUpdateEgg, useUpdateEggVariable } from "@workspace/api-client-react";
 import type { EggDetail, EggVariable } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -14,13 +14,6 @@ import {
 
 const inputClass = "w-full rounded-lg border border-border/60 bg-white/5 px-3 py-2 text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-colors";
 const labelClass = "block text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 mb-1.5";
-
-function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem("egh_token");
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) h["Authorization"] = `Bearer ${token}`;
-  return h;
-}
 
 function SectionHeader({ icon: Icon, title, subtitle }: {
   icon: React.ElementType; title: string; subtitle?: string;
@@ -85,6 +78,7 @@ export default function AdminEggDetail() {
     data: EggDetail | undefined; isLoading: boolean; refetch: () => void;
   };
   const updateEgg = useUpdateEgg();
+  const updateEggVariable = useUpdateEggVariable();
 
   useEffect(() => {
     function onPop() { setTab(getTabFromSearch()); }
@@ -141,13 +135,13 @@ export default function AdminEggDetail() {
   // ── Variable edit state ───────────────────────────────────────────────────
   const [editingVarId, setEditingVarId] = useState<number | null>(null);
   const [varForm, setVarForm] = useState({
-    defaultValue: "", userViewable: true, userEditable: false, rules: "",
+    name: "", defaultValue: "", userViewable: true, userEditable: false, rules: "",
   });
-  const [varSaving, setVarSaving] = useState(false);
 
   function openVarEdit(v: EggVariable) {
     setEditingVarId(v.id);
     setVarForm({
+      name: v.name ?? "",
       defaultValue: v.defaultValue ?? "",
       userViewable: Boolean(v.userViewable),
       userEditable: Boolean(v.userEditable),
@@ -156,24 +150,23 @@ export default function AdminEggDetail() {
   }
 
   async function handleVarSave(varId: number) {
-    setVarSaving(true);
     try {
-      const res = await fetch(`/api/eggs/${eggId}/variables/${varId}`, {
-        method: "PATCH",
-        headers: authHeaders(),
-        body: JSON.stringify(varForm),
+      await updateEggVariable.mutateAsync({
+        eggId,
+        varId,
+        data: {
+          name: varForm.name || undefined,
+          defaultValue: varForm.defaultValue,
+          userViewable: varForm.userViewable,
+          userEditable: varForm.userEditable,
+          rules: varForm.rules,
+        },
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? `Server returned ${res.status}`);
-      }
       refetch();
       setEditingVarId(null);
       toast({ title: "Variable saved" });
-    } catch (err: unknown) {
-      toast({ title: err instanceof Error ? err.message : "Failed to save variable", variant: "destructive" });
-    } finally {
-      setVarSaving(false);
+    } catch {
+      toast({ title: "Failed to save variable", variant: "destructive" });
     }
   }
 
@@ -419,10 +412,20 @@ export default function AdminEggDetail() {
                       {isEditing ? (
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="text-sm font-semibold text-foreground">{v.name}</span>
                             <code className="text-[10px] font-mono bg-black/30 border border-border/40 rounded px-1.5 py-0.5 text-muted-foreground">
                               {v.envVariable}
                             </code>
+                          </div>
+                          <div>
+                            <label className={labelClass}>Variable Name</label>
+                            <input
+                              className={inputClass}
+                              value={varForm.name}
+                              onChange={(e) => setVarForm((p) => ({ ...p, name: e.target.value }))}
+                              placeholder="Display name"
+                              required
+                              data-testid={`input-var-name-${v.id}`}
+                            />
                           </div>
                           <div>
                             <label className={labelClass}>Default Value</label>
@@ -470,17 +473,17 @@ export default function AdminEggDetail() {
                             <button
                               type="button"
                               onClick={() => handleVarSave(v.id)}
-                              disabled={varSaving}
+                              disabled={updateEggVariable.isPending}
                               className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50"
                               data-testid={`button-save-var-${v.id}`}
                             >
-                              {varSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                              {varSaving ? "Saving…" : "Save"}
+                              {updateEggVariable.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                              {updateEggVariable.isPending ? "Saving…" : "Save"}
                             </button>
                             <button
                               type="button"
                               onClick={() => setEditingVarId(null)}
-                              disabled={varSaving}
+                              disabled={updateEggVariable.isPending}
                               className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
                             >
                               <X className="h-3 w-3" />
