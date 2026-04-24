@@ -180,6 +180,16 @@ export type EggDetail = Egg & {
   configFiles?: string | null;
 };
 
+export interface CreateEggVariableBody {
+  name: string;
+  envVariable: string;
+  description?: string;
+  defaultValue?: string;
+  userViewable?: boolean;
+  userEditable?: boolean;
+  rules?: string;
+}
+
 export interface CreateEggBody {
   nestId: number;
   name: string;

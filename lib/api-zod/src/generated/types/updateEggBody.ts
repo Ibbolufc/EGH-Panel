@@ -5,6 +5,7 @@
  * EGH Panel API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateEggVariableItem } from "./updateEggVariableItem";
 
 export interface UpdateEggBody {
   nestId?: number;
@@ -14,4 +15,5 @@ export interface UpdateEggBody {
   startup?: string;
   installScript?: string;
   configFiles?: string;
+  variables?: UpdateEggVariableItem[];
 }

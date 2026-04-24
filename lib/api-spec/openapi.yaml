@@ -476,6 +476,63 @@ paths:
         "204":
           description: Deleted
 
+  /eggs/{id}/variables:
+    post:
+      operationId: createEggVariable
+      tags: [eggs]
+      summary: Add a variable to an egg (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEggVariableBody"
+      responses:
+        "201":
+          description: Variable created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EggVariable"
+        "404":
+          description: Egg not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /eggs/{id}/variables/{varId}:
+    delete:
+      operationId: deleteEggVariable
+      tags: [eggs]
+      summary: Delete a variable from an egg (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: varId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # Nodes
   /nodes:
     get:
@@ -1535,6 +1592,27 @@ components:
             configFiles:
               type: ["string", "null"]
 
+    CreateEggVariableBody:
+      type: object
+      properties:
+        name:
+          type: string
+        envVariable:
+          type: string
+        description:
+          type: string
+        defaultValue:
+          type: string
+        userViewable:
+          type: boolean
+        userEditable:
+          type: boolean
+        rules:
+          type: string
+      required:
+        - name
+        - envVariable
+
     CreateEggBody:
       type: object
       properties:
@@ -1558,6 +1636,26 @@ components:
         - dockerImage
         - startup
 
+    UpdateEggVariableItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        defaultValue:
+          type: string
+        userViewable:
+          type: boolean
+        userEditable:
+          type: boolean
+        rules:
+          type: string
+      required:
+        - id
+
     UpdateEggBody:
       type: object
       properties:
@@ -1575,6 +1673,10 @@ components:
           type: string
         configFiles:
           type: string
+        variables:
+          type: array
+          items:
+            $ref: "#/components/schemas/UpdateEggVariableItem"
 
     ImportEggBody:
       type: object

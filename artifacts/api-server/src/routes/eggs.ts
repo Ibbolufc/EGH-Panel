@@ -328,4 +328,66 @@ router.delete("/eggs/:id", requireAdmin, asyncHandler(async (req, res) => {
   res.sendStatus(204);
 }));
 
+const CreateEggVariableBody = z.object({
+  name: z.string().min(1).max(255),
+  envVariable: z.string().min(1).max(255),
+  description: z.string().optional(),
+  defaultValue: z.string().optional().default(""),
+  userViewable: z.boolean().optional().default(true),
+  userEditable: z.boolean().optional().default(false),
+  rules: z.string().optional().default(""),
+});
+
+router.post("/eggs/:id/variables", requireAdmin, validateBody(CreateEggVariableBody), asyncHandler(async (req, res) => {
+  const eggId = parseIntParam(req, res, "id");
+  if (eggId === null) return;
+
+  const [egg] = await db.select({ id: eggsTable.id }).from(eggsTable).where(eq(eggsTable.id, eggId));
+  if (!egg) {
+    res.status(404).json({ error: "Egg not found" });
+    return;
+  }
+
+  const data = req.body as z.infer<typeof CreateEggVariableBody>;
+  const [variable] = await db.insert(eggVariablesTable).values({
+    eggId,
+    name: data.name,
+    envVariable: data.envVariable,
+    description: data.description ?? null,
+    defaultValue: data.defaultValue ?? "",
+    userViewable: String(data.userViewable ?? true),
+    userEditable: String(data.userEditable ?? false),
+    rules: data.rules ?? "",
+  }).returning();
+
+  res.status(201).json({
+    ...variable,
+    userViewable: variable.userViewable === "true",
+    userEditable: variable.userEditable === "true",
+  });
+}));
+
+router.delete("/eggs/:id/variables/:varId", requireAdmin, asyncHandler(async (req, res) => {
+  const eggId = parseIntParam(req, res, "id");
+  if (eggId === null) return;
+
+  const varId = parseInt(req.params.varId, 10);
+  if (Number.isNaN(varId)) {
+    res.status(400).json({ error: "Invalid variable ID" });
+    return;
+  }
+
+  const [deleted] = await db
+    .delete(eggVariablesTable)
+    .where(and(eq(eggVariablesTable.id, varId), eq(eggVariablesTable.eggId, eggId)))
+    .returning();
+
+  if (!deleted) {
+    res.status(404).json({ error: "Variable not found" });
+    return;
+  }
+
+  res.sendStatus(204);
+}));
+
 export default router;

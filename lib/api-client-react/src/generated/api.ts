@@ -28,6 +28,7 @@ import type {
   CreateAllocationBody,
   CreateBackupBody,
   CreateEggBody,
+  CreateEggVariableBody,
   CreateNestBody,
   CreateNodeBody,
   CreateScheduleBody,
@@ -36,6 +37,7 @@ import type {
   DeleteFileBody,
   Egg,
   EggDetail,
+  EggVariable,
   ErrorResponse,
   FileContent,
   FileEntry,
@@ -1818,6 +1820,178 @@ export const useDeleteEgg = <
   TContext
 > => {
   return useMutation(getDeleteEggMutationOptions(options));
+};
+
+/**
+ * @summary Add a variable to an egg (admin only)
+ */
+export const getCreateEggVariableUrl = (id: number) => {
+  return `/api/eggs/${id}/variables`;
+};
+
+export const createEggVariable = async (
+  id: number,
+  createEggVariableBody: CreateEggVariableBody,
+  options?: RequestInit,
+): Promise<EggVariable> => {
+  return customFetch<EggVariable>(getCreateEggVariableUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createEggVariableBody),
+  });
+};
+
+export const getCreateEggVariableMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEggVariable>>,
+    TError,
+    { id: number; data: BodyType<CreateEggVariableBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createEggVariable>>,
+  TError,
+  { id: number; data: BodyType<CreateEggVariableBody> },
+  TContext
+> => {
+  const mutationKey = ["createEggVariable"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createEggVariable>>,
+    { id: number; data: BodyType<CreateEggVariableBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createEggVariable(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateEggVariableMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createEggVariable>>
+>;
+export type CreateEggVariableMutationBody = BodyType<CreateEggVariableBody>;
+export type CreateEggVariableMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Add a variable to an egg (admin only)
+ */
+export const useCreateEggVariable = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEggVariable>>,
+    TError,
+    { id: number; data: BodyType<CreateEggVariableBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createEggVariable>>,
+  TError,
+  { id: number; data: BodyType<CreateEggVariableBody> },
+  TContext
+> => {
+  return useMutation(getCreateEggVariableMutationOptions(options));
+};
+
+/**
+ * @summary Delete a variable from an egg (admin only)
+ */
+export const getDeleteEggVariableUrl = (id: number, varId: number) => {
+  return `/api/eggs/${id}/variables/${varId}`;
+};
+
+export const deleteEggVariable = async (
+  id: number,
+  varId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteEggVariableUrl(id, varId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteEggVariableMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteEggVariable>>,
+    TError,
+    { id: number; varId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteEggVariable>>,
+  TError,
+  { id: number; varId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteEggVariable"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteEggVariable>>,
+    { id: number; varId: number }
+  > = (props) => {
+    const { id, varId } = props ?? {};
+
+    return deleteEggVariable(id, varId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteEggVariableMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteEggVariable>>
+>;
+
+export type DeleteEggVariableMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a variable from an egg (admin only)
+ */
+export const useDeleteEggVariable = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteEggVariable>>,
+    TError,
+    { id: number; varId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteEggVariable>>,
+  TError,
+  { id: number; varId: number },
+  TContext
+> => {
+  return useMutation(getDeleteEggVariableMutationOptions(options));
 };
 
 /**

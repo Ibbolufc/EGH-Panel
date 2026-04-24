@@ -363,6 +363,19 @@ export const UpdateEggBody = zod.object({
   startup: zod.string().optional(),
   installScript: zod.string().optional(),
   configFiles: zod.string().optional(),
+  variables: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        name: zod.string().optional(),
+        description: zod.string().optional(),
+        defaultValue: zod.string().optional(),
+        userViewable: zod.boolean().optional(),
+        userEditable: zod.boolean().optional(),
+        rules: zod.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const UpdateEggResponse = zod.object({
@@ -381,6 +394,31 @@ export const UpdateEggResponse = zod.object({
  */
 export const DeleteEggParams = zod.object({
   id: zod.coerce.number(),
+});
+
+/**
+ * @summary Add a variable to an egg (admin only)
+ */
+export const CreateEggVariableParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateEggVariableBody = zod.object({
+  name: zod.string(),
+  envVariable: zod.string(),
+  description: zod.string().optional(),
+  defaultValue: zod.string().optional(),
+  userViewable: zod.boolean().optional(),
+  userEditable: zod.boolean().optional(),
+  rules: zod.string().optional(),
+});
+
+/**
+ * @summary Delete a variable from an egg (admin only)
+ */
+export const DeleteEggVariableParams = zod.object({
+  id: zod.coerce.number(),
+  varId: zod.coerce.number(),
 });
 
 /**
