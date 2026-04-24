@@ -319,6 +319,14 @@ export default function AdminUserDetail() {
             ) : (
               <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-4">
                 <p className="text-sm font-medium text-foreground mb-1">Are you sure you want to delete <span className="font-semibold">{user.firstName} {user.lastName}</span>?</p>
+                {userServers.length > 0 && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 mb-3">
+                    <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-200">
+                      This user owns <span className="font-semibold">{userServers.length} server{userServers.length !== 1 ? "s" : ""}</span>. Deleting them will orphan {userServers.length === 1 ? "that server" : "those servers"} — they will no longer have an owner.
+                    </p>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mb-4">This action cannot be undone. The user and all their data will be permanently removed.</p>
                 <div className="flex items-center gap-3">
                   <button
