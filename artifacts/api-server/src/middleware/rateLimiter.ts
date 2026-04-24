@@ -19,6 +19,22 @@ export const authLimiter = rateLimit({
 });
 
 /**
+ * Token-regen limiter — 5 req/min per IP.
+ *
+ * Regenerating a node token is a destructive action: it immediately invalidates
+ * any in-flight install that is using the old token. Keeping this tight prevents
+ * a rogue or compromised admin session from flooding the endpoint and disrupting
+ * legitimate provisioning runs.
+ */
+export const regenTokenLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many token regeneration requests, please wait a minute and try again." },
+});
+
+/**
  * Install-script limiter — 15 req/min per IP.
  *
  * The install.sh endpoint is public and token-authenticated. A lower limit

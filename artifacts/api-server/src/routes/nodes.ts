@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { db, nodesTable, allocationsTable, serversTable } from "@workspace/db";
 import { CreateNodeBody } from "@workspace/api-zod";
 import { requireAdmin } from "../lib/auth";
-import { installScriptLimiter } from "../middleware/rateLimiter";
+import { installScriptLimiter, regenTokenLimiter } from "../middleware/rateLimiter";
 
 const router: Router = Router();
 
@@ -301,7 +301,7 @@ echo "============================================================"
 });
 
 // Regenerate registration token — invalidates any pending install command
-router.post("/nodes/:id/regen-token", requireAdmin, async (req, res): Promise<void> => {
+router.post("/nodes/:id/regen-token", requireAdmin, regenTokenLimiter, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
 
