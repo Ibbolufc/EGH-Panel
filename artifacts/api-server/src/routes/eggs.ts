@@ -270,6 +270,44 @@ router.patch("/eggs/:id", requireAdmin, validateBody(UpdateEggBody), asyncHandle
   res.json({ ...egg, nestName: nest?.name ?? "Unknown" });
 }));
 
+const UpdateEggVariableBody = z.object({
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().optional(),
+  defaultValue: z.string().optional(),
+  userViewable: z.boolean().optional(),
+  userEditable: z.boolean().optional(),
+  rules: z.string().optional(),
+});
+
+router.patch("/eggs/:id/variables/:varId", requireAdmin, validateBody(UpdateEggVariableBody), asyncHandler(async (req, res) => {
+  const id = parseIntParam(req, res, "id");
+  if (id === null) return;
+  const varId = parseIntParam(req, res, "varId");
+  if (varId === null) return;
+
+  const body = req.body as z.infer<typeof UpdateEggVariableBody>;
+  const update: Record<string, unknown> = {};
+  if (body.name !== undefined) update.name = body.name;
+  if (body.description !== undefined) update.description = body.description;
+  if (body.defaultValue !== undefined) update.defaultValue = body.defaultValue;
+  if (body.userViewable !== undefined) update.userViewable = String(body.userViewable);
+  if (body.userEditable !== undefined) update.userEditable = String(body.userEditable);
+  if (body.rules !== undefined) update.rules = body.rules;
+
+  const [updated] = await db
+    .update(eggVariablesTable)
+    .set(update)
+    .where(and(eq(eggVariablesTable.id, varId), eq(eggVariablesTable.eggId, id)))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Variable not found" });
+    return;
+  }
+
+  res.json({ ...updated, userViewable: updated.userViewable === "true", userEditable: updated.userEditable === "true" });
+}));
+
 router.delete("/eggs/:id", requireAdmin, asyncHandler(async (req, res) => {
   const id = parseIntParam(req, res, "id");
   if (id === null) return;

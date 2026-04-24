@@ -1,14 +1,26 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
-import { useGetEgg } from "@workspace/api-client-react";
+import { useGetEgg, useUpdateEgg } from "@workspace/api-client-react";
 import type { EggDetail, EggVariable } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   ChevronRight, Egg, Settings, List,
   Terminal, FileCode, Tag, Eye, EyeOff, Pencil,
+  Save, Loader2, X, Check,
 } from "lucide-react";
+
+const inputClass = "w-full rounded-lg border border-border/60 bg-white/5 px-3 py-2 text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-colors";
+const labelClass = "block text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 mb-1.5";
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem("egh_token");
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) h["Authorization"] = `Bearer ${token}`;
+  return h;
+}
 
 function SectionHeader({ icon: Icon, title, subtitle }: {
   icon: React.ElementType; title: string; subtitle?: string;
@@ -31,6 +43,7 @@ function TabBtn({ active, onClick, icon: Icon, label }: {
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
@@ -66,10 +79,12 @@ export default function AdminEggDetail() {
   const eggId = Number(id);
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<TabId>(getTabFromSearch);
+  const { toast } = useToast();
 
-  const { data: egg, isLoading } = useGetEgg(eggId) as {
-    data: EggDetail | undefined; isLoading: boolean;
+  const { data: egg, isLoading, refetch } = useGetEgg(eggId) as {
+    data: EggDetail | undefined; isLoading: boolean; refetch: () => void;
   };
+  const updateEgg = useUpdateEgg();
 
   useEffect(() => {
     function onPop() { setTab(getTabFromSearch()); }
@@ -82,6 +97,84 @@ export default function AdminEggDetail() {
     const sp = new URLSearchParams(window.location.search);
     sp.set("tab", newTab);
     navigate(`${window.location.pathname}?${sp.toString()}`);
+  }
+
+  // ── Details edit state ────────────────────────────────────────────────────
+  const [detailsEditing, setDetailsEditing] = useState(false);
+  const [detailsForm, setDetailsForm] = useState({
+    name: "", description: "", dockerImage: "", startup: "", installScript: "",
+  });
+
+  function openDetailsEdit() {
+    if (!egg) return;
+    setDetailsForm({
+      name: egg.name ?? "",
+      description: egg.description ?? "",
+      dockerImage: egg.dockerImage ?? "",
+      startup: egg.startup ?? "",
+      installScript: egg.installScript ?? "",
+    });
+    setDetailsEditing(true);
+  }
+
+  async function handleDetailsSave(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await updateEgg.mutateAsync({
+        id: eggId,
+        data: {
+          name: detailsForm.name || undefined,
+          description: detailsForm.description || undefined,
+          dockerImage: detailsForm.dockerImage || undefined,
+          startup: detailsForm.startup || undefined,
+          installScript: detailsForm.installScript || undefined,
+        },
+      });
+      refetch();
+      setDetailsEditing(false);
+      toast({ title: "Egg settings saved" });
+    } catch {
+      toast({ title: "Failed to save egg settings", variant: "destructive" });
+    }
+  }
+
+  // ── Variable edit state ───────────────────────────────────────────────────
+  const [editingVarId, setEditingVarId] = useState<number | null>(null);
+  const [varForm, setVarForm] = useState({
+    defaultValue: "", userViewable: true, userEditable: false, rules: "",
+  });
+  const [varSaving, setVarSaving] = useState(false);
+
+  function openVarEdit(v: EggVariable) {
+    setEditingVarId(v.id);
+    setVarForm({
+      defaultValue: v.defaultValue ?? "",
+      userViewable: Boolean(v.userViewable),
+      userEditable: Boolean(v.userEditable),
+      rules: v.rules ?? "",
+    });
+  }
+
+  async function handleVarSave(varId: number) {
+    setVarSaving(true);
+    try {
+      const res = await fetch(`/api/eggs/${eggId}/variables/${varId}`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify(varForm),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? `Server returned ${res.status}`);
+      }
+      refetch();
+      setEditingVarId(null);
+      toast({ title: "Variable saved" });
+    } catch (err: unknown) {
+      toast({ title: err instanceof Error ? err.message : "Failed to save variable", variant: "destructive" });
+    } finally {
+      setVarSaving(false);
+    }
   }
 
   if (isLoading) {
@@ -153,45 +246,139 @@ export default function AdminEggDetail() {
           </div>
         </div>
 
-        {/* Details tab */}
+        {/* ── DETAILS TAB ──────────────────────────────────────────────────── */}
         {tab === "details" && (
-          <div className="grid gap-5 lg:grid-cols-2">
-            {/* Docker & Runtime */}
+          <div className="space-y-5">
+            {/* Docker & Runtime — editable */}
             <div className="rounded-xl border border-border/60 bg-card p-5">
-              <SectionHeader icon={Settings} title="Docker &amp; Runtime" subtitle="Image and startup configuration" />
-              <dl className="space-y-0">
-                <InfoRow label="Docker Image" value={
-                  <code className="text-xs font-mono break-all text-foreground">{egg.dockerImage}</code>
-                } />
-                <InfoRow label="Startup Command" value={
-                  <code className="text-xs font-mono break-all text-emerald-400">{egg.startup}</code>
-                } />
-                {egg.dockerImages && egg.dockerImages.length > 1 && (
-                  <InfoRow label="Alt. Images" value={
-                    <div className="space-y-1">
-                      {egg.dockerImages.map((img, i) => (
-                        <code key={i} className="block text-xs font-mono break-all text-muted-foreground">{img}</code>
-                      ))}
-                    </div>
-                  } />
+              <div className="flex items-center justify-between mb-4">
+                <SectionHeader icon={Settings} title="Docker &amp; Runtime" subtitle="Image and startup configuration" />
+                {!detailsEditing && (
+                  <button
+                    type="button"
+                    onClick={openDetailsEdit}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
+                    data-testid="button-edit-egg-details"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </button>
                 )}
-              </dl>
+              </div>
+
+              {detailsEditing ? (
+                <form onSubmit={handleDetailsSave} className="space-y-4">
+                  <div>
+                    <label className={labelClass}>Egg Name</label>
+                    <input
+                      className={inputClass}
+                      value={detailsForm.name}
+                      onChange={(e) => setDetailsForm((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="e.g. Minecraft Java"
+                      required
+                      data-testid="input-egg-name"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Description</label>
+                    <textarea
+                      className={cn(inputClass, "resize-none min-h-[64px]")}
+                      value={detailsForm.description}
+                      onChange={(e) => setDetailsForm((p) => ({ ...p, description: e.target.value }))}
+                      placeholder="Optional description"
+                      data-testid="input-egg-description"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Docker Image</label>
+                    <input
+                      className={inputClass}
+                      value={detailsForm.dockerImage}
+                      onChange={(e) => setDetailsForm((p) => ({ ...p, dockerImage: e.target.value }))}
+                      placeholder="e.g. ghcr.io/pterodactyl/yolks:java_21"
+                      required
+                      data-testid="input-egg-docker-image"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Startup Command</label>
+                    <input
+                      className={inputClass}
+                      value={detailsForm.startup}
+                      onChange={(e) => setDetailsForm((p) => ({ ...p, startup: e.target.value }))}
+                      placeholder="e.g. java -jar server.jar"
+                      required
+                      data-testid="input-egg-startup"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Install Script <span className="font-normal text-muted-foreground/50 normal-case">(bash, optional)</span></label>
+                    <textarea
+                      className={cn(inputClass, "font-mono text-xs min-h-[120px] resize-y")}
+                      value={detailsForm.installScript}
+                      onChange={(e) => setDetailsForm((p) => ({ ...p, installScript: e.target.value }))}
+                      placeholder="#!/bin/bash&#10;# install script…"
+                      data-testid="input-egg-install-script"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="submit"
+                      disabled={updateEgg.isPending}
+                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50"
+                      data-testid="button-save-egg-details"
+                    >
+                      {updateEgg.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      {updateEgg.isPending ? "Saving…" : "Save Changes"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDetailsEditing(false)}
+                      disabled={updateEgg.isPending}
+                      className="inline-flex items-center gap-2 rounded-lg border border-border/60 px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors disabled:opacity-50"
+                    >
+                      <X className="h-4 w-4" />
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <dl className="space-y-0">
+                  <InfoRow label="Docker Image" value={
+                    <code className="text-xs font-mono break-all text-foreground">{egg.dockerImage}</code>
+                  } />
+                  <InfoRow label="Startup Command" value={
+                    <code className="text-xs font-mono break-all text-emerald-400">{egg.startup}</code>
+                  } />
+                  {egg.dockerImages && egg.dockerImages.length > 1 && (
+                    <InfoRow label="Alt. Images" value={
+                      <div className="space-y-1">
+                        {egg.dockerImages.map((img, i) => (
+                          <code key={i} className="block text-xs font-mono break-all text-muted-foreground">{img}</code>
+                        ))}
+                      </div>
+                    } />
+                  )}
+                </dl>
+              )}
             </div>
 
-            {/* Metadata */}
-            <div className="rounded-xl border border-border/60 bg-card p-5">
-              <SectionHeader icon={Tag} title="Metadata" />
-              <dl className="space-y-0">
-                <InfoRow label="Egg ID" value={<code className="text-xs font-mono">{egg.id}</code>} />
-                <InfoRow label="Nest" value={egg.nestName} />
-                <InfoRow label="Variables" value={`${variables.length} variable${variables.length !== 1 ? "s" : ""}`} />
-                <InfoRow label="Created" value={new Date(egg.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })} />
-              </dl>
-            </div>
+            {/* Metadata (read-only) */}
+            {!detailsEditing && (
+              <div className="rounded-xl border border-border/60 bg-card p-5">
+                <SectionHeader icon={Tag} title="Metadata" />
+                <dl className="space-y-0">
+                  <InfoRow label="Egg ID" value={<code className="text-xs font-mono">{egg.id}</code>} />
+                  <InfoRow label="Nest" value={egg.nestName} />
+                  <InfoRow label="Variables" value={`${variables.length} variable${variables.length !== 1 ? "s" : ""}`} />
+                  <InfoRow label="Created" value={new Date(egg.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })} />
+                </dl>
+              </div>
+            )}
 
-            {/* Install Script */}
-            {egg.installScript && (
-              <div className="rounded-xl border border-border/60 bg-card p-5 lg:col-span-2">
+            {/* Install Script (read-only display) */}
+            {!detailsEditing && egg.installScript && (
+              <div className="rounded-xl border border-border/60 bg-card p-5">
                 <SectionHeader icon={FileCode} title="Install Script" subtitle="Runs during server installation" />
                 <div className="overflow-hidden rounded-lg border border-border/40 bg-black/40">
                   <div className="px-3 py-1.5 border-b border-border/40 flex items-center gap-2">
@@ -207,7 +394,7 @@ export default function AdminEggDetail() {
           </div>
         )}
 
-        {/* Variables tab */}
+        {/* ── VARIABLES TAB ────────────────────────────────────────────────── */}
         {tab === "variables" && (
           <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-border/40">
@@ -225,49 +412,135 @@ export default function AdminEggDetail() {
               </div>
             ) : (
               <div className="divide-y divide-border/40">
-                {variables.map((v) => (
-                  <div key={v.id} className="px-5 py-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-foreground">{v.name}</span>
-                          <code className="text-[10px] font-mono bg-black/30 border border-border/40 rounded px-1.5 py-0.5 text-muted-foreground">
-                            {v.envVariable}
-                          </code>
+                {variables.map((v) => {
+                  const isEditing = editingVarId === v.id;
+                  return (
+                    <div key={v.id} className="px-5 py-4">
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="text-sm font-semibold text-foreground">{v.name}</span>
+                            <code className="text-[10px] font-mono bg-black/30 border border-border/40 rounded px-1.5 py-0.5 text-muted-foreground">
+                              {v.envVariable}
+                            </code>
+                          </div>
+                          <div>
+                            <label className={labelClass}>Default Value</label>
+                            <input
+                              className={inputClass}
+                              value={varForm.defaultValue}
+                              onChange={(e) => setVarForm((p) => ({ ...p, defaultValue: e.target.value }))}
+                              placeholder="Leave blank for no default"
+                              data-testid={`input-var-default-${v.id}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={labelClass}>Validation Rules</label>
+                            <input
+                              className={inputClass}
+                              value={varForm.rules}
+                              onChange={(e) => setVarForm((p) => ({ ...p, rules: e.target.value }))}
+                              placeholder="e.g. required|string|between:1,100"
+                              data-testid={`input-var-rules-${v.id}`}
+                            />
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={varForm.userViewable}
+                                onChange={(e) => setVarForm((p) => ({ ...p, userViewable: e.target.checked }))}
+                                className="h-4 w-4 rounded border-border/60 bg-white/5 accent-primary"
+                                data-testid={`checkbox-var-viewable-${v.id}`}
+                              />
+                              <span className="text-xs text-muted-foreground">User viewable</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={varForm.userEditable}
+                                onChange={(e) => setVarForm((p) => ({ ...p, userEditable: e.target.checked }))}
+                                className="h-4 w-4 rounded border-border/60 bg-white/5 accent-primary"
+                                data-testid={`checkbox-var-editable-${v.id}`}
+                              />
+                              <span className="text-xs text-muted-foreground">User editable</span>
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleVarSave(v.id)}
+                              disabled={varSaving}
+                              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50"
+                              data-testid={`button-save-var-${v.id}`}
+                            >
+                              {varSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                              {varSaving ? "Saving…" : "Save"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingVarId(null)}
+                              disabled={varSaving}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
+                            >
+                              <X className="h-3 w-3" />
+                              Cancel
+                            </button>
+                          </div>
                         </div>
-                        {v.description && (
-                          <p className="text-xs text-muted-foreground mt-1">{v.description}</p>
-                        )}
-                        <div className="flex items-center gap-3 mt-2">
-                          <span className="text-xs text-muted-foreground">
-                            Default: <code className="font-mono text-foreground/70">{v.defaultValue || "none"}</code>
-                          </span>
-                          {v.rules && (
-                            <span className="text-xs text-muted-foreground">
-                              Rules: <code className="font-mono text-foreground/70">{v.rules}</code>
+                      ) : (
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-semibold text-foreground">{v.name}</span>
+                              <code className="text-[10px] font-mono bg-black/30 border border-border/40 rounded px-1.5 py-0.5 text-muted-foreground">
+                                {v.envVariable}
+                              </code>
+                            </div>
+                            {v.description && (
+                              <p className="text-xs text-muted-foreground mt-1">{v.description}</p>
+                            )}
+                            <div className="flex items-center gap-3 mt-2 flex-wrap">
+                              <span className="text-xs text-muted-foreground">
+                                Default: <code className="font-mono text-foreground/70">{v.defaultValue || "none"}</code>
+                              </span>
+                              {v.rules && (
+                                <span className="text-xs text-muted-foreground">
+                                  Rules: <code className="font-mono text-foreground/70">{v.rules}</code>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={cn(
+                              "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium",
+                              v.userViewable ? "bg-blue-500/10 text-blue-400" : "bg-white/5 text-muted-foreground"
+                            )}>
+                              {v.userViewable ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                              {v.userViewable ? "Viewable" : "Hidden"}
                             </span>
-                          )}
+                            <span className={cn(
+                              "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium",
+                              v.userEditable ? "bg-emerald-500/10 text-emerald-400" : "bg-white/5 text-muted-foreground"
+                            )}>
+                              <Pencil className="h-3 w-3" />
+                              {v.userEditable ? "Editable" : "Locked"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => openVarEdit(v)}
+                              className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-white/3 px-2.5 py-1 text-xs text-muted-foreground hover:bg-white/8 hover:text-foreground transition-colors"
+                              data-testid={`button-edit-var-${v.id}`}
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Edit
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={cn(
-                          "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium",
-                          v.userViewable ? "bg-blue-500/10 text-blue-400" : "bg-white/5 text-muted-foreground"
-                        )}>
-                          {v.userViewable ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                          {v.userViewable ? "Viewable" : "Hidden"}
-                        </span>
-                        <span className={cn(
-                          "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium",
-                          v.userEditable ? "bg-emerald-500/10 text-emerald-400" : "bg-white/5 text-muted-foreground"
-                        )}>
-                          <Pencil className="h-3 w-3" />
-                          {v.userEditable ? "Editable" : "Locked"}
-                        </span>
-                      </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
