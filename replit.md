@@ -64,10 +64,14 @@ scripts/
 
 ### Admin Panel
 - **Dashboard** — Live stats (servers, users, nodes, eggs, status breakdowns)
-- **Users** — CRUD with roles (super_admin, admin, client), active toggle
-- **Servers** — Create from egg templates, manage resources, power actions
+- **Users** — CRUD with roles (super_admin, admin, client), active toggle; click edit icon to go to user detail page
+- **User Detail** (`/admin/users/:id`) — Profile editing + assigned server list; tabs sync to URL (?tab=)
+- **Servers** — Create from egg templates, manage resources, power actions; click server name to go to detail page
+- **Server Detail** (`/admin/servers/:id`) — Overview (resources, assignment, metadata) + settings editor; tabs sync to URL (?tab=)
 - **Nodes** — Add/remove nodes, allocation management
-- **Eggs & Nests** — CRUD + Pterodactyl JSON import with validation + preview
+- **Node Detail** (`/admin/nodes/:id`) — Full node config with 5 tabs; tabs sync to URL (?tab=)
+- **Eggs & Nests** — CRUD + Pterodactyl JSON import with validation + preview; click egg name to go to detail page
+- **Egg Detail** (`/admin/eggs/:id`) — Docker/startup config + variable list; tabs sync to URL (?tab=)
 - **Activity** — Full audit log with pagination
 - **Settings** — Account and password management
 

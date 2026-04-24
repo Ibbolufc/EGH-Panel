@@ -5,6 +5,7 @@ import {
   Plus, Egg, FolderOpen, Upload, ChevronDown, ChevronRight,
   PackageOpen, Loader2
 } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -187,7 +188,11 @@ export default function AdminEggs() {
                                 <Egg className="h-3.5 w-3.5 text-orange-400" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-foreground">{egg.name}</p>
+                                <Link href={`/admin/eggs/${egg.id}`}>
+                                  <a className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+                                    {egg.name}
+                                  </a>
+                                </Link>
                                 <p className="text-xs text-muted-foreground truncate mt-0.5">
                                   {egg.description || "No description"}
                                 </p>

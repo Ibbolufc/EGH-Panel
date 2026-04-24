@@ -11,10 +11,13 @@ import Setup from "@/pages/setup";
 
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminUsers from "@/pages/admin/users";
+import AdminUserDetail from "@/pages/admin/user-detail";
 import AdminServers from "@/pages/admin/servers";
+import AdminServerDetail from "@/pages/admin/server-detail";
 import AdminNodes from "@/pages/admin/nodes";
 import AdminNodeDetail from "@/pages/admin/node-detail";
 import AdminEggs from "@/pages/admin/eggs";
+import AdminEggDetail from "@/pages/admin/egg-detail";
 import AdminActivity from "@/pages/admin/activity";
 import AdminSettings from "@/pages/admin/settings";
 
@@ -128,10 +131,13 @@ function Router() {
         {/* Admin Routes */}
         <Route path="/admin">{() => <AdminRoute component={AdminDashboard} />}</Route>
         <Route path="/admin/users">{() => <AdminRoute component={AdminUsers} />}</Route>
+        <Route path="/admin/users/:id">{() => <AdminRoute component={AdminUserDetail} />}</Route>
         <Route path="/admin/servers">{() => <AdminRoute component={AdminServers} />}</Route>
+        <Route path="/admin/servers/:id">{() => <AdminRoute component={AdminServerDetail} />}</Route>
         <Route path="/admin/nodes">{() => <AdminRoute component={AdminNodes} />}</Route>
         <Route path="/admin/nodes/:id">{() => <AdminRoute component={AdminNodeDetail} />}</Route>
         <Route path="/admin/eggs">{() => <AdminRoute component={AdminEggs} />}</Route>
+        <Route path="/admin/eggs/:id">{() => <AdminRoute component={AdminEggDetail} />}</Route>
         <Route path="/admin/activity">{() => <AdminRoute component={AdminActivity} />}</Route>
         <Route path="/admin/settings">{() => <AdminRoute component={AdminSettings} />}</Route>
 

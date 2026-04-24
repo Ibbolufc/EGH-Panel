@@ -174,7 +174,7 @@ export default function AdminServers() {
                           <Server className="h-4 w-4 text-primary" />
                         </div>
                         <div className="min-w-0">
-                          <Link href={`/client/servers/${server.id}`}>
+                          <Link href={`/admin/servers/${server.id}`}>
                             <a className="font-medium text-foreground hover:text-primary transition-colors truncate block">
                               {server.name}
                             </a>

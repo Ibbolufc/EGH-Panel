@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { AdminLayout } from "@/components/layout/admin-layout";
-import { useListUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@workspace/api-client-react";
+import { useListUsers, useCreateUser, useDeleteUser } from "@workspace/api-client-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Plus, Search, Pencil, Trash2, Users, Loader2 } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -21,7 +22,6 @@ export default function AdminUsers() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [editUser, setEditUser] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const { data, isLoading, refetch } = useListUsers({ page: 1, limit: 100 });
   const deleteUser = useDeleteUser();
@@ -185,14 +185,14 @@ export default function AdminUsers() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-0.5">
-                        <button
-                          onClick={() => setEditUser(user)}
-                          className="rounded-md p-1.5 text-muted-foreground/50 hover:bg-white/8 hover:text-foreground transition-colors"
-                          data-testid={`button-edit-user-${user.id}`}
-                          title="Edit user"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
+                        <Link href={`/admin/users/${user.id}`}>
+                          <a
+                            className="rounded-md p-1.5 text-muted-foreground/50 hover:bg-white/8 hover:text-foreground transition-colors inline-flex items-center"
+                            title="View user detail"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </a>
+                        </Link>
                         <button
                           onClick={() => handleDelete(user.id)}
                           disabled={deletingId === user.id}
@@ -218,13 +218,6 @@ export default function AdminUsers() {
           <CreateUserModal
             onClose={() => setShowCreate(false)}
             onSuccess={() => { setShowCreate(false); refetch(); }}
-          />
-        )}
-        {editUser && (
-          <EditUserModal
-            user={editUser}
-            onClose={() => setEditUser(null)}
-            onSuccess={() => { setEditUser(null); refetch(); }}
           />
         )}
       </div>
@@ -317,49 +310,3 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   );
 }
 
-function EditUserModal({ user, onClose, onSuccess }: { user: any; onClose: () => void; onSuccess: () => void }) {
-  const [form, setForm] = useState({ email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role });
-  const updateUser = useUpdateUser();
-  const { toast } = useToast();
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      await updateUser.mutateAsync({ id: user.id, data: form });
-      toast({ title: "User updated" });
-      onSuccess();
-    } catch {
-      toast({ title: "Failed to update user", variant: "destructive" });
-    }
-  }
-
-  return (
-    <Modal title="Edit User" subtitle={`Editing ${user.firstName} ${user.lastName}`} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>First Name</label>
-            <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} className={inputClass} required />
-          </div>
-          <div>
-            <label className={labelClass}>Last Name</label>
-            <input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} className={inputClass} required />
-          </div>
-        </div>
-        <div>
-          <label className={labelClass}>Email</label>
-          <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} required />
-        </div>
-        <div>
-          <label className={labelClass}>Role</label>
-          <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className={inputClass}>
-            <option value="client">Client — server access only</option>
-            <option value="admin">Admin — full panel access</option>
-            <option value="super_admin">Super Admin — unrestricted</option>
-          </select>
-        </div>
-        <ModalFooter onClose={onClose} pending={updateUser.isPending} submitLabel="Save Changes" />
-      </form>
-    </Modal>
-  );
-}
