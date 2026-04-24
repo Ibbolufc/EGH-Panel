@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import {
   useGetNode, useUpdateNode, useCreateAllocation,
@@ -420,12 +420,27 @@ function CopyBtn({ text, label = "Copy", size = "sm" }: { text: string; label?: 
 export default function NodeDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
-  const initialTab: TabId = (() => {
+  const [, navigate] = useLocation();
+
+  const validTabs: TabId[] = ["overview", "allocations", "servers", "install", "settings"];
+  const getTabFromSearch = (): TabId => {
     const t = new URLSearchParams(window.location.search).get("tab");
-    const valid: TabId[] = ["overview", "allocations", "servers", "install", "settings"];
-    return valid.includes(t as TabId) ? (t as TabId) : "overview";
-  })();
-  const [tab, setTab] = useState<TabId>(initialTab);
+    return validTabs.includes(t as TabId) ? (t as TabId) : "overview";
+  };
+  const [tab, setTab] = useState<TabId>(getTabFromSearch);
+
+  function handleTabChange(newTab: TabId) {
+    setTab(newTab);
+    const sp = new URLSearchParams(window.location.search);
+    sp.set("tab", newTab);
+    navigate(`${window.location.pathname}?${sp.toString()}`);
+  }
+
+  useEffect(() => {
+    function onPop() { setTab(getTabFromSearch()); }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   const [deletingAllocId, setDeletingAllocId] = useState<number | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [regenPending, setRegenPending] = useState(false);
@@ -599,11 +614,11 @@ export default function NodeDetailPage() {
 
         {/* Tab navigation */}
         <div className="flex items-center gap-1 border-b border-border/40">
-          <TabBtn active={tab === "overview"}     onClick={() => setTab("overview")}     icon={Activity}    label="Resources"    />
-          <TabBtn active={tab === "allocations"}  onClick={() => setTab("allocations")}  icon={Network}     label="Allocations"  />
-          <TabBtn active={tab === "servers"}      onClick={() => setTab("servers")}      icon={ServerIcon}  label="Servers"      />
-          <TabBtn active={tab === "install"}      onClick={() => setTab("install")}      icon={Download}    label="Install"      />
-          <TabBtn active={tab === "settings"}     onClick={() => setTab("settings")}     icon={Settings}    label="Settings"     />
+          <TabBtn active={tab === "overview"}     onClick={() => handleTabChange("overview")}     icon={Activity}    label="Resources"    />
+          <TabBtn active={tab === "allocations"}  onClick={() => handleTabChange("allocations")}  icon={Network}     label="Allocations"  />
+          <TabBtn active={tab === "servers"}      onClick={() => handleTabChange("servers")}      icon={ServerIcon}  label="Servers"      />
+          <TabBtn active={tab === "install"}      onClick={() => handleTabChange("install")}      icon={Download}    label="Install"      />
+          <TabBtn active={tab === "settings"}     onClick={() => handleTabChange("settings")}     icon={Settings}    label="Settings"     />
         </div>
 
         {/* ── RESOURCES TAB ───────────────────────────────────────────────── */}
