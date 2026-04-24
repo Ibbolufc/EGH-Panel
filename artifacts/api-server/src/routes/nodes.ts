@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { db, nodesTable, allocationsTable, serversTable } from "@workspace/db";
 import { CreateNodeBody } from "@workspace/api-zod";
 import { requireAdmin } from "../lib/auth";
+import { installScriptLimiter } from "../middleware/rateLimiter";
 
 const router: Router = Router();
 
@@ -143,7 +144,7 @@ router.patch("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
 // Powers the Quick Install one-liner shown in the admin UI:
 //   curl -fsSL "<panelUrl>/api/nodes/:id/install.sh?token=<registrationToken>" | sudo bash
 // Error responses are valid shell so a piped execution fails with a readable message.
-router.get("/nodes/:id/install.sh", async (req, res): Promise<void> => {
+router.get("/nodes/:id/install.sh", installScriptLimiter, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
   const token = typeof req.query.token === "string" ? req.query.token : "";
