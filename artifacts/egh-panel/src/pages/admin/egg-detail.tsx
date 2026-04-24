@@ -117,10 +117,10 @@ export default function AdminEggDetail() {
         id: eggId,
         data: {
           name: detailsForm.name || undefined,
-          description: detailsForm.description || undefined,
+          description: detailsForm.description,
           dockerImage: detailsForm.dockerImage || undefined,
           startup: detailsForm.startup || undefined,
-          installScript: detailsForm.installScript || undefined,
+          installScript: detailsForm.installScript,
         },
       });
       refetch();

@@ -295,6 +295,7 @@ router.patch("/eggs/:id", requireAdmin, validateBody(UpdateEggBody), asyncHandle
       const update: Record<string, unknown> = { ...rest };
       if (userViewable !== undefined) update.userViewable = String(userViewable);
       if (userEditable !== undefined) update.userEditable = String(userEditable);
+      if (Object.keys(update).length === 0) continue;
       await db
         .update(eggVariablesTable)
         .set(update)
