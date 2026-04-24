@@ -14,7 +14,7 @@
  * Run with:
  *   PORT=8080 node --test artifacts/api-server/src/routes/__tests__/nodes-install-sh.test.mjs
  */
-import { describe, it, before } from "node:test";
+import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 
 const BASE = `http://localhost:${process.env.PORT ?? 8080}`;
@@ -24,6 +24,8 @@ let jwtToken;
 let nodeId;
 let registrationToken;
 
+// Deterministic setup: creates a dedicated test node so the suite never
+// depends on pre-existing seeded data.
 before(async () => {
   // ── Authenticate ────────────────────────────────────────────────────────────
   const loginRes = await fetch(`${BASE}/api/auth/login`, {
@@ -36,23 +38,41 @@ before(async () => {
   jwtToken = loginData.token;
   assert.ok(jwtToken, "JWT token must be present in login response");
 
-  // ── Grab first node and regen token ─────────────────────────────────────────
-  const nodesRes = await fetch(`${BASE}/api/nodes`, {
-    headers: { Authorization: `Bearer ${jwtToken}` },
-  });
-  assert.equal(nodesRes.status, 200, "Nodes list must return 200");
-  const nodes = await nodesRes.json();
-  assert.ok(nodes.length > 0, "At least one node must exist for install tests");
-  nodeId = nodes[0].id;
-
-  const regenRes = await fetch(`${BASE}/api/nodes/${nodeId}/regen-token`, {
+  // ── Create a dedicated test node ─────────────────────────────────────────────
+  const createRes = await fetch(`${BASE}/api/nodes`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${jwtToken}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${jwtToken}`,
+    },
+    body: JSON.stringify({
+      name: `install-sh-test-${Date.now()}`,
+      fqdn: "install-sh-test.example.com",
+      daemonPort: 8888,
+      scheme: "http",
+      isPublic: false,
+      memoryTotal: 1024,
+      memoryOverallocate: 0,
+      diskTotal: 10240,
+      diskOverallocate: 0,
+      location: "test",
+    }),
   });
-  assert.equal(regenRes.status, 200, "Token regen must return 200");
-  const regenData = await regenRes.json();
-  registrationToken = regenData.registrationToken;
-  assert.ok(registrationToken?.startsWith("reg_"), "Registration token must start with 'reg_'");
+  assert.equal(createRes.status, 201, "Test node creation must return 201");
+  const created = await createRes.json();
+  nodeId = created.id;
+  registrationToken = created.registrationToken;
+  assert.ok(registrationToken?.startsWith("reg_"), "New node must have a registrationToken");
+});
+
+// Teardown: remove the test node created in setup.
+after(async () => {
+  if (nodeId && jwtToken) {
+    await fetch(`${BASE}/api/nodes/${nodeId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${jwtToken}` },
+    });
+  }
 });
 
 // ── GET /api/nodes/:id/install.sh ──────────────────────────────────────────────
@@ -112,7 +132,6 @@ describe("GET /api/nodes — nodes list (InstallCommandModal data source)", () =
     assert.equal(res.status, 200, "Nodes list must return 200");
     const nodes = await res.json();
     assert.ok(Array.isArray(nodes), "Response must be an array");
-    assert.ok(nodes.length > 0, "At least one node must be present");
 
     const node = nodes.find((n) => n.id === nodeId);
     assert.ok(node, "Test node must appear in the list");
@@ -156,16 +175,16 @@ describe("POST /api/nodes — create node (Create Node success step data source)
         Authorization: `Bearer ${jwtToken}`,
       },
       body: JSON.stringify({
-        name: `test-install-sh-${Date.now()}`,
-        fqdn: "test-install.example.com",
-        daemonPort: 8080,
+        name: `install-sh-create-test-${Date.now()}`,
+        fqdn: "install-sh-create-test.example.com",
+        daemonPort: 8889,
         scheme: "http",
         isPublic: false,
         memoryTotal: 1024,
         memoryOverallocate: 0,
         diskTotal: 10240,
         diskOverallocate: 0,
-        location: "test-install",
+        location: "test",
       }),
     });
     assert.equal(res.status, 201, "Node creation must return 201");
@@ -178,7 +197,7 @@ describe("POST /api/nodes — create node (Create Node success step data source)
       "registrationToken must be returned in create response for the success step one-liner"
     );
 
-    // Clean up the test node
+    // Clean up the transient node created for this test
     await fetch(`${BASE}/api/nodes/${created.id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${jwtToken}` },
