@@ -140,7 +140,24 @@ function InstallCommandModal({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Quick Install Script</p>
-              <CopyButton text={script} label="Copy full script" />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const blob = new Blob([script], { type: "text/x-sh" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `install-egh-node-${node.id}.sh`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-white/5 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                >
+                  <Download className="h-3 w-3" />
+                  Download .sh
+                </button>
+                <CopyButton text={script} label="Copy full script" />
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
               Paste and run this complete script as root on your node. It installs Docker (if missing), downloads EGH Node, writes the configuration, and starts the agent service.
