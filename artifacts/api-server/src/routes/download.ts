@@ -8,6 +8,13 @@ const router: Router = Router();
 
 const VERSION_KEY = "egh_node_version";
 
+/**
+ * Pinned EGH Node (Wings) binary version.
+ * To upgrade, change this constant and redeploy — no runtime DB change needed.
+ * This is intentionally hardcoded so version bumps require a deliberate code change.
+ */
+const PINNED_VERSION = "v1.11.13";
+
 const ALLOWED_REDIRECT_HOSTS = [
   "github.com",
   "objects.githubusercontent.com",
@@ -31,17 +38,14 @@ async function getConfiguredVersion(): Promise<string> {
     .from(panelSettingsTable)
     .where(eq(panelSettingsTable.key, VERSION_KEY))
     .limit(1);
-  const version = rows[0]?.value ?? "latest";
+  const version = rows[0]?.value ?? PINNED_VERSION;
   _cachedVersion = version;
   _cacheExpiresAt = now + CACHE_TTL_MS;
   return version;
 }
 
 function buildWingsUrl(version: string): string {
-  const safe = version.replace(/[^a-z0-9._-]/gi, "");
-  if (safe === "latest" || safe === "") {
-    return "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64";
-  }
+  const safe = version.replace(/[^a-z0-9._-]/gi, "") || PINNED_VERSION;
   return `https://github.com/pterodactyl/wings/releases/download/${safe}/wings_linux_amd64`;
 }
 
