@@ -139,6 +139,149 @@ router.patch("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
   res.json(nodeWithMeta(node));
 });
 
+// Public install-script endpoint — authenticated via ?token=<registrationToken> query param.
+// Powers the Quick Install one-liner shown in the admin UI:
+//   curl -fsSL "<panelUrl>/api/nodes/:id/install.sh?token=<registrationToken>" | sudo bash
+// Error responses are valid shell so a piped execution fails with a readable message.
+router.get("/nodes/:id/install.sh", async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+
+  if (!token) {
+    res.status(401).setHeader("Content-Type", "text/x-shellscript").send(
+      "#!/usr/bin/env bash\n# Error: missing ?token query parameter\necho 'Error: missing token' >&2\nexit 1\n"
+    );
+    return;
+  }
+
+  const [node] = await db.select().from(nodesTable).where(eq(nodesTable.id, id));
+
+  if (!node) {
+    res.status(404).setHeader("Content-Type", "text/x-shellscript").send(
+      "#!/usr/bin/env bash\n# Error: node not found\necho 'Error: node not found' >&2\nexit 1\n"
+    );
+    return;
+  }
+
+  if (!node.registrationToken || node.registrationToken !== token) {
+    res.status(403).setHeader("Content-Type", "text/x-shellscript").send(
+      "#!/usr/bin/env bash\n# Error: invalid or expired token\necho 'Error: invalid or expired token — regenerate it from the EGH Panel' >&2\nexit 1\n"
+    );
+    return;
+  }
+
+  // Reconstruct the panel URL from the incoming request.
+  // app.set("trust proxy", 1) ensures req.protocol reflects X-Forwarded-Proto.
+  const panelUrl = `${req.protocol}://${req.get("host")}`;
+
+  const { name: nodeName, fqdn: nodeFqdn, daemonPort, scheme, registrationToken } = node;
+
+  const script = `#!/usr/bin/env bash
+# ============================================================
+#  EGH Panel — EGH Node auto-install
+#  Node: ${nodeName} (ID: ${id})
+#  Run as root on the target machine. Do NOT run on your panel.
+# ============================================================
+set -euo pipefail
+
+EGH_PANEL_URL="${panelUrl}"
+EGH_NODE_TOKEN="${registrationToken}"
+EGH_NODE_FQDN="${nodeFqdn}"
+EGH_NODE_PORT="${daemonPort}"
+EGH_CONFIG_DIR="/etc/egh-node"
+EGH_DATA_DIR="/var/lib/egh-node/volumes"
+EGH_AGENT_URL="${panelUrl}/api/download/egh-node"
+
+# ── 1. Root check ──────────────────────────────────────────
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: this script must be run as root (sudo -i)." >&2
+  exit 1
+fi
+
+echo "[1/5] Checking system..."
+apt-get update -q
+
+# ── 2. Install Docker if missing ───────────────────────────
+echo "[2/5] Checking Docker..."
+if ! command -v docker &>/dev/null; then
+  echo "  Installing Docker Engine..."
+  curl -fsSL https://get.docker.com | bash
+  systemctl enable --now docker
+  echo "  Docker installed."
+else
+  echo "  Docker already present."
+fi
+
+# ── 3. Download EGH Node agent ─────────────────────────────
+echo "[3/5] Downloading EGH Node agent..."
+mkdir -p "\${EGH_CONFIG_DIR}" /var/log/egh-node
+curl -fsSL "\${EGH_AGENT_URL}" -o /usr/local/bin/egh-node
+chmod +x /usr/local/bin/egh-node
+
+# ── 4. Write EGH Node config ───────────────────────────────
+echo "[4/5] Writing EGH Node configuration..."
+mkdir -p "\${EGH_DATA_DIR}"
+cat > "\${EGH_CONFIG_DIR}/config.yml" << NODECONF
+debug: false
+api:
+  host: "0.0.0.0"
+  port: \${EGH_NODE_PORT}
+  ssl:
+    enabled: false
+  upload_limit: 100
+system:
+  data: "\${EGH_DATA_DIR}"
+  sftp:
+    bind_port: 2022
+remote: "\${EGH_PANEL_URL}"
+token: "\${EGH_NODE_TOKEN}"
+allowed_origins:
+  - "\${EGH_PANEL_URL}"
+NODECONF
+
+# ── 5. Install & start EGH Node service ───────────────────
+echo "[5/5] Installing EGH Node service..."
+cat > /etc/systemd/system/egh-node.service << SVCEOF
+[Unit]
+Description=EGH Node Agent
+After=docker.service
+Requires=docker.service
+
+[Service]
+User=root
+WorkingDirectory=\${EGH_CONFIG_DIR}
+LimitNOFILE=4096
+PIDFile=/var/run/egh-node/daemon.pid
+ExecStart=/usr/local/bin/egh-node --config \${EGH_CONFIG_DIR}/config.yml
+Restart=on-failure
+StartLimitInterval=600
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=egh-node
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+
+systemctl daemon-reload
+systemctl enable --now egh-node
+
+echo ""
+echo "============================================================"
+echo " EGH Node installed and started."
+echo " Node ${nodeName} will appear Online in EGH Panel once it"
+echo " connects to: \${EGH_PANEL_URL}"
+echo "============================================================"
+`;
+
+  res
+    .status(200)
+    .setHeader("Content-Type", "text/x-shellscript")
+    .setHeader("Content-Disposition", `attachment; filename="install-egh-node-${id}.sh"`)
+    .send(script);
+});
+
 // Regenerate registration token — invalidates any pending install command
 router.post("/nodes/:id/regen-token", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
