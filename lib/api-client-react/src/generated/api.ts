@@ -819,15 +819,25 @@ export const useUpdateUser = <
 /**
  * @summary Delete user (admin only)
  */
-export const getDeleteUserUrl = (id: number) => {
-  return `/api/users/${id}`;
+export const getDeleteUserUrl = (
+  id: number,
+  params?: { serverAction?: "delete" | "reassign"; reassignTo?: number },
+) => {
+  const base = `/api/users/${id}`;
+  if (!params) return base;
+  const qs = new URLSearchParams();
+  if (params.serverAction) qs.set("serverAction", params.serverAction);
+  if (params.reassignTo !== undefined) qs.set("reassignTo", String(params.reassignTo));
+  const str = qs.toString();
+  return str ? `${base}?${str}` : base;
 };
 
 export const deleteUser = async (
   id: number,
+  params?: { serverAction?: "delete" | "reassign"; reassignTo?: number },
   options?: RequestInit,
 ): Promise<void> => {
-  return customFetch<void>(getDeleteUserUrl(id), {
+  return customFetch<void>(getDeleteUserUrl(id, params), {
     ...options,
     method: "DELETE",
   });
@@ -840,14 +850,14 @@ export const getDeleteUserMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof deleteUser>>,
     TError,
-    { id: number },
+    { id: number; serverAction?: "delete" | "reassign"; reassignTo?: number },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof deleteUser>>,
   TError,
-  { id: number },
+  { id: number; serverAction?: "delete" | "reassign"; reassignTo?: number },
   TContext
 > => {
   const mutationKey = ["deleteUser"];
@@ -861,11 +871,10 @@ export const getDeleteUserMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof deleteUser>>,
-    { id: number }
+    { id: number; serverAction?: "delete" | "reassign"; reassignTo?: number }
   > = (props) => {
-    const { id } = props ?? {};
-
-    return deleteUser(id, requestOptions);
+    const { id, serverAction, reassignTo } = props ?? {};
+    return deleteUser(id, { serverAction, reassignTo }, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -887,14 +896,14 @@ export const useDeleteUser = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof deleteUser>>,
     TError,
-    { id: number },
+    { id: number; serverAction?: "delete" | "reassign"; reassignTo?: number },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof deleteUser>>,
   TError,
-  { id: number },
+  { id: number; serverAction?: "delete" | "reassign"; reassignTo?: number },
   TContext
 > => {
   return useMutation(getDeleteUserMutationOptions(options));

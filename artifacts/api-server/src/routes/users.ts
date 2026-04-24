@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, ilike, and, count, sql } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, serversTable } from "@workspace/db";
 import { CreateUserBody, UpdateUserBody } from "@workspace/api-zod";
 import { requireAdmin, hashPassword } from "../lib/auth";
 import { logActivity } from "../lib/activity";
@@ -147,6 +147,27 @@ router.delete("/users/:id", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
 
+  const serverAction = typeof req.query.serverAction === "string" ? req.query.serverAction : undefined;
+  const reassignTo = typeof req.query.reassignTo === "string" ? parseInt(req.query.reassignTo, 10) : undefined;
+
+  const userServers = await db.select({ id: serversTable.id }).from(serversTable).where(eq(serversTable.userId, id));
+
+  if (userServers.length > 0) {
+    if (serverAction === "delete") {
+      await db.delete(serversTable).where(eq(serversTable.userId, id));
+    } else if (serverAction === "reassign" && reassignTo && !Number.isNaN(reassignTo)) {
+      const [targetUser] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, reassignTo));
+      if (!targetUser) {
+        res.status(400).json({ error: "Reassignment target user not found" });
+        return;
+      }
+      await db.update(serversTable).set({ userId: reassignTo }).where(eq(serversTable.userId, id));
+    } else {
+      res.status(409).json({ error: "User has servers", serverCount: userServers.length });
+      return;
+    }
+  }
+
   const [user] = await db.delete(usersTable).where(eq(usersTable.id, id)).returning({ email: usersTable.email });
 
   if (!user) {
@@ -158,7 +179,7 @@ router.delete("/users/:id", requireAdmin, async (req, res): Promise<void> => {
     req,
     userId: req.user?.userId,
     event: "user.deleted",
-    description: `Admin deleted user ${user.email}`,
+    description: `Admin deleted user ${user.email}${serverAction === "delete" ? " (servers deleted)" : serverAction === "reassign" ? ` (servers reassigned to user ${reassignTo})` : ""}`,
   });
 
   res.sendStatus(204);

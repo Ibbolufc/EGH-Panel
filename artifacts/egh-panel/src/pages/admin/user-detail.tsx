@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
-import { useGetUser, useUpdateUser, useListServers, useDeleteUser } from "@workspace/api-client-react";
+import { useGetUser, useUpdateUser, useListServers, useDeleteUser, useListUsers } from "@workspace/api-client-react";
 import type { UserDetail, Server, UpdateUserBodyRole } from "@workspace/api-client-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -81,9 +81,14 @@ export default function AdminUserDetail() {
 
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
+  const { data: usersData } = useListUsers({ limit: 100 });
+  const otherUsers = (usersData?.data ?? []).filter((u) => u.id !== userId);
+
   const [form, setForm] = useState({ email: "", firstName: "", lastName: "", role: "client" as UpdateUserBodyRole });
   const [formDirty, setFormDirty] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteAction, setDeleteAction] = useState<"none" | "delete" | "reassign">("none");
+  const [reassignToId, setReassignToId] = useState<number | "">("");
 
   useEffect(() => {
     if (user) {
@@ -121,9 +126,28 @@ export default function AdminUserDetail() {
     }
   }
 
+  function openDeleteConfirm() {
+    setDeleteAction("none");
+    setReassignToId("");
+    setDeleteConfirm(true);
+  }
+
+  function cancelDeleteConfirm() {
+    setDeleteConfirm(false);
+    setDeleteAction("none");
+    setReassignToId("");
+  }
+
   async function handleDelete() {
+    const hasServers = userServers.length > 0;
+    if (hasServers && deleteAction === "none") return;
+    if (hasServers && deleteAction === "reassign" && !reassignToId) return;
     try {
-      await deleteUser.mutateAsync({ id: userId });
+      await deleteUser.mutateAsync({
+        id: userId,
+        serverAction: hasServers ? (deleteAction as "delete" | "reassign") : undefined,
+        reassignTo: deleteAction === "reassign" && reassignToId ? Number(reassignToId) : undefined,
+      });
       toast({ title: "User deleted" });
       navigate("/admin/users");
     } catch {
@@ -309,38 +333,110 @@ export default function AdminUserDetail() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setDeleteConfirm(true)}
+                  onClick={openDeleteConfirm}
                   className="inline-flex items-center gap-2 rounded-lg border border-destructive/50 px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                  data-testid="button-open-delete"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete User
                 </button>
               </div>
             ) : (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-4">
-                <p className="text-sm font-medium text-foreground mb-1">Are you sure you want to delete <span className="font-semibold">{user.firstName} {user.lastName}</span>?</p>
+              <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-4 space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Are you sure you want to delete <span className="font-semibold">{user.firstName} {user.lastName}</span>?</p>
+                  <p className="text-xs text-muted-foreground mt-1">This action cannot be undone. The user account will be permanently removed.</p>
+                </div>
+
                 {userServers.length > 0 && (
-                  <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 mb-3">
-                    <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                    <p className="text-xs text-amber-200">
-                      This user owns <span className="font-semibold">{userServers.length} server{userServers.length !== 1 ? "s" : ""}</span>. Deleting them will orphan {userServers.length === 1 ? "that server" : "those servers"} — they will no longer have an owner.
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      What should happen to their {userServers.length} server{userServers.length !== 1 ? "s" : ""}?
                     </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteAction("delete")}
+                        data-testid="button-action-delete-servers"
+                        className={cn(
+                          "flex items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
+                          deleteAction === "delete"
+                            ? "border-destructive/70 bg-destructive/10 text-foreground"
+                            : "border-border/60 hover:border-destructive/40 hover:bg-white/5 text-muted-foreground",
+                        )}
+                      >
+                        <Trash2 className="h-4 w-4 mt-0.5 shrink-0 text-destructive" />
+                        <div>
+                          <p className="text-sm font-medium leading-tight">Delete all servers</p>
+                          <p className="text-xs mt-0.5 text-muted-foreground">Permanently remove all {userServers.length} server{userServers.length !== 1 ? "s" : ""}</p>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteAction("reassign")}
+                        data-testid="button-action-reassign-servers"
+                        className={cn(
+                          "flex items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
+                          deleteAction === "reassign"
+                            ? "border-primary/70 bg-primary/10 text-foreground"
+                            : "border-border/60 hover:border-primary/40 hover:bg-white/5 text-muted-foreground",
+                        )}
+                      >
+                        <Users className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+                        <div>
+                          <p className="text-sm font-medium leading-tight">Reassign to another user</p>
+                          <p className="text-xs mt-0.5 text-muted-foreground">Transfer ownership before deleting</p>
+                        </div>
+                      </button>
+                    </div>
+
+                    {deleteAction === "reassign" && (
+                      <div className="pt-1">
+                        <label className="block text-xs font-medium text-muted-foreground mb-1.5">Transfer servers to</label>
+                        <select
+                          value={reassignToId}
+                          onChange={(e) => setReassignToId(e.target.value ? Number(e.target.value) : "")}
+                          data-testid="select-reassign-target"
+                          className="w-full rounded-lg border border-border/60 bg-white/5 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-colors"
+                        >
+                          <option value="">— Select a user —</option>
+                          {otherUsers.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.firstName} {u.lastName} ({u.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {deleteAction === "none" && (
+                      <p className="text-xs text-amber-300 flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        Choose what to do with their servers to continue.
+                      </p>
+                    )}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground mb-4">This action cannot be undone. The user and all their data will be permanently removed.</p>
-                <div className="flex items-center gap-3">
+
+                <div className="flex items-center gap-3 pt-1">
                   <button
                     type="button"
                     onClick={handleDelete}
-                    disabled={deleteUser.isPending}
-                    className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                    disabled={
+                      deleteUser.isPending ||
+                      (userServers.length > 0 && deleteAction === "none") ||
+                      (userServers.length > 0 && deleteAction === "reassign" && !reassignToId)
+                    }
+                    data-testid="button-confirm-delete"
+                    className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {deleteUser.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4" /> Yes, Delete User</>}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDeleteConfirm(false)}
+                    onClick={cancelDeleteConfirm}
                     disabled={deleteUser.isPending}
+                    data-testid="button-cancel-delete"
                     className="text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                   >
                     Cancel
