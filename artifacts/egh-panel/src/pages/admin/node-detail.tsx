@@ -460,11 +460,16 @@ export default function NodeDetailPage() {
   async function handleRegenToken() {
     setRegenPending(true);
     try {
-      await fetch(`/api/nodes/${id}/regen-token`, { method: "POST", headers: authHeaders() });
+      const res = await fetch(`/api/nodes/${id}/regen-token`, { method: "POST", headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? `Server returned ${res.status}`);
+      }
       refetchNode();
       toast({ title: "Token regenerated", description: "The previous install command is now invalid." });
-    } catch {
-      toast({ title: "Failed to regenerate token", variant: "destructive" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to regenerate token";
+      toast({ title: msg, variant: "destructive" });
     } finally {
       setRegenPending(false);
     }

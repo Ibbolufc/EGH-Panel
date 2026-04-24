@@ -96,45 +96,15 @@ export default function AdminSettings() {
     }
   }
 
-  const [nodeVersion, setNodeVersion] = useState("latest");
-  const [nodeVersionInput, setNodeVersionInput] = useState("latest");
+  const [nodeVersion, setNodeVersion] = useState<string | null>(null);
   const [versionLoading, setVersionLoading] = useState(true);
-  const [versionSaving, setVersionSaving] = useState(false);
-  const [versionSaved, setVersionSaved] = useState(false);
 
   useEffect(() => {
-    customFetch<{ version: string }>("/api/settings/egh-node-version")
-      .then((data) => {
-        setNodeVersion(data.version);
-        setNodeVersionInput(data.version);
-      })
+    customFetch<{ version: string; pinned?: boolean }>("/api/settings/egh-node-version")
+      .then((data) => setNodeVersion(data.version))
       .catch(() => {})
       .finally(() => setVersionLoading(false));
   }, []);
-
-  async function handleVersionSave(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = nodeVersionInput.trim();
-    if (!trimmed) return;
-    setVersionSaving(true);
-    try {
-      const data = await customFetch<{ version: string }>("/api/settings/egh-node-version", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ version: trimmed }),
-      });
-      setNodeVersion(data.version);
-      setNodeVersionInput(data.version);
-      setVersionSaved(true);
-      toast({ title: "Agent version updated" });
-      setTimeout(() => setVersionSaved(false), 5000);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to save version";
-      toast({ title: msg, variant: "destructive" });
-    } finally {
-      setVersionSaving(false);
-    }
-  }
 
   return (
     <AdminLayout title="Settings">
@@ -259,46 +229,23 @@ export default function AdminSettings() {
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                 </div>
               ) : (
-                <form onSubmit={handleVersionSave} className="space-y-3.5">
-                  {versionSaved && (
-                    <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-400">
-                      <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      Version updated — new installs will use <strong className="ml-1">{nodeVersion}</strong>
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-border/50 bg-white/2 px-4 py-3 flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-1">Pinned Version</p>
+                      <code className="text-sm font-mono text-foreground">{nodeVersion ?? "—"}</code>
                     </div>
-                  )}
-
-                  <div>
-                    <label className={labelClass}>Binary Version</label>
-                    <input
-                      type="text"
-                      value={nodeVersionInput}
-                      onChange={(e) => setNodeVersionInput(e.target.value)}
-                      placeholder='e.g. latest or v1.11.14'
-                      className={inputClass}
-                      data-testid="input-node-version"
-                    />
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-400">
+                      <CheckCircle2 className="h-3 w-3" /> Pinned
+                    </span>
                   </div>
-
                   <div className="flex items-start gap-2 rounded-lg border border-border/40 bg-white/2 p-3 text-xs text-muted-foreground">
                     <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary/60" />
                     <span>
-                      Use <code className="font-mono text-foreground/70">latest</code> to always serve the newest release, or pin to a specific tag like <code className="font-mono text-foreground/70">v1.11.14</code>. Changes take effect immediately — no redeploy needed.
+                      The binary version is hardcoded in the panel source code. To upgrade, update <code className="font-mono text-foreground/70">PINNED_VERSION</code> in <code className="font-mono text-foreground/70">api-server/src/routes/download.ts</code> and redeploy the panel.
                     </span>
                   </div>
-
-                  <div>
-                    <button
-                      type="submit"
-                      disabled={versionSaving || !nodeVersionInput.trim() || nodeVersionInput.trim() === nodeVersion}
-                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50"
-                      data-testid="button-save-node-version"
-                    >
-                      {versionSaving ? (
-                        <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
-                      ) : "Save Version"}
-                    </button>
-                  </div>
-                </form>
+                </div>
               )}
             </div>
           </div>
