@@ -173,6 +173,11 @@ router.delete("/users/:id", requireAdmin, async (req, res): Promise<void> => {
 
     if (userServers.length > 0) {
       if (serverAction === "delete") {
+        // Best-effort provider cleanup: runs before the DB transaction so the
+        // daemon can destroy containers while server records still exist.
+        // Non-fatal — DB deletion proceeds even if the daemon is unreachable.
+        // Atomicity is guaranteed for DB state only; provider-side failures are
+        // consistent with the existing single-server delete behaviour.
         for (const s of userServers) {
           try {
             const { providerServer } = await buildProviderServer(s.id);
