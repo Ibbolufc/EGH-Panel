@@ -150,8 +150,15 @@ export default function AdminUserDetail() {
       });
       toast({ title: "User deleted" });
       navigate("/admin/users");
-    } catch {
-      toast({ title: "Failed to delete user", variant: "destructive" });
+    } catch (err: unknown) {
+      let message = "Failed to delete user";
+      if (err && typeof err === "object" && "data" in err) {
+        const data = (err as { data: unknown }).data;
+        if (data && typeof data === "object" && "error" in data && typeof (data as { error: unknown }).error === "string") {
+          message = (data as { error: string }).error;
+        }
+      }
+      toast({ title: message, variant: "destructive" });
     }
   }
 

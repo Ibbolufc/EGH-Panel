@@ -148,38 +148,67 @@ router.delete("/users/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = parseInt(rawId, 10);
 
   const serverAction = typeof req.query.serverAction === "string" ? req.query.serverAction : undefined;
-  const reassignTo = typeof req.query.reassignTo === "string" ? parseInt(req.query.reassignTo, 10) : undefined;
+  const rawReassignTo = typeof req.query.reassignTo === "string" ? parseInt(req.query.reassignTo, 10) : undefined;
+  const reassignTo = rawReassignTo !== undefined && !Number.isNaN(rawReassignTo) ? rawReassignTo : undefined;
 
-  const userServers = await db.select({ id: serversTable.id }).from(serversTable).where(eq(serversTable.userId, id));
-
-  if (userServers.length > 0) {
-    if (serverAction === "delete") {
-      await db.delete(serversTable).where(eq(serversTable.userId, id));
-    } else if (serverAction === "reassign" && reassignTo && !Number.isNaN(reassignTo)) {
-      const [targetUser] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, reassignTo));
-      if (!targetUser) {
-        res.status(400).json({ error: "Reassignment target user not found" });
-        return;
-      }
-      await db.update(serversTable).set({ userId: reassignTo }).where(eq(serversTable.userId, id));
-    } else {
-      res.status(409).json({ error: "User has servers", serverCount: userServers.length });
+  if (serverAction === "reassign") {
+    if (!reassignTo) {
+      res.status(400).json({ error: "reassignTo is required when serverAction is 'reassign'" });
+      return;
+    }
+    if (reassignTo === id) {
+      res.status(400).json({ error: "Cannot reassign servers to the user being deleted" });
       return;
     }
   }
 
-  const [user] = await db.delete(usersTable).where(eq(usersTable.id, id)).returning({ email: usersTable.email });
+  let deletedEmail = "";
+  await db.transaction(async (tx) => {
+    const userServers = await tx.select({ id: serversTable.id }).from(serversTable).where(eq(serversTable.userId, id));
 
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
+    if (userServers.length > 0) {
+      if (serverAction === "delete") {
+        await tx.delete(serversTable).where(eq(serversTable.userId, id));
+      } else if (serverAction === "reassign" && reassignTo) {
+        const [targetUser] = await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, reassignTo));
+        if (!targetUser) {
+          throw Object.assign(new Error("Reassignment target user not found"), { statusCode: 400 });
+        }
+        await tx.update(serversTable).set({ userId: reassignTo }).where(eq(serversTable.userId, id));
+      } else {
+        throw Object.assign(
+          new Error("User has servers — choose to delete or reassign them before deleting the user"),
+          { statusCode: 409, serverCount: userServers.length },
+        );
+      }
+    }
+
+    const [user] = await tx.delete(usersTable).where(eq(usersTable.id, id)).returning({ email: usersTable.email });
+    if (!user) {
+      throw Object.assign(new Error("User not found"), { statusCode: 404 });
+    }
+    deletedEmail = user.email;
+  }).catch((err: unknown) => {
+    const e = err as { statusCode?: number; serverCount?: number; message?: string };
+    if (e.statusCode === 409) {
+      res.status(409).json({ error: e.message, serverCount: e.serverCount });
+    } else if (e.statusCode === 400) {
+      res.status(400).json({ error: e.message });
+    } else if (e.statusCode === 404) {
+      res.status(404).json({ error: e.message });
+    } else {
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+    throw err;
+  });
+
+  if (res.headersSent) return;
 
   await logActivity({
     req,
     userId: req.user?.userId,
     event: "user.deleted",
-    description: `Admin deleted user ${user.email}${serverAction === "delete" ? " (servers deleted)" : serverAction === "reassign" ? ` (servers reassigned to user ${reassignTo})` : ""}`,
+    description: `Admin deleted user ${deletedEmail}${serverAction === "delete" ? " (servers deleted)" : serverAction === "reassign" ? ` (servers reassigned to user ${reassignTo})` : ""}`,
   });
 
   res.sendStatus(204);
