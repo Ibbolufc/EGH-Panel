@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
-import { useGetUser, useUpdateUser, useListServers } from "@workspace/api-client-react";
+import { useGetUser, useUpdateUser, useListServers, useDeleteUser } from "@workspace/api-client-react";
 import type { UserDetail, Server, UpdateUserBodyRole } from "@workspace/api-client-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   ChevronRight, User, Users, Server as ServerIcon, Shield,
-  Loader2, Save, MemoryStick, HardDrive, Mail, Calendar,
+  Loader2, Save, MemoryStick, HardDrive, Mail, Calendar, Trash2, AlertTriangle,
 } from "lucide-react";
 
 const inputClass =
@@ -80,8 +80,10 @@ export default function AdminUserDetail() {
   const userServers = allServers.filter((s: Server) => s.userId === userId);
 
   const updateUser = useUpdateUser();
+  const deleteUser = useDeleteUser();
   const [form, setForm] = useState({ email: "", firstName: "", lastName: "", role: "client" as UpdateUserBodyRole });
   const [formDirty, setFormDirty] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -116,6 +118,16 @@ export default function AdminUserDetail() {
       refetch();
     } catch {
       toast({ title: "Failed to update user", variant: "destructive" });
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      await deleteUser.mutateAsync({ id: userId });
+      toast({ title: "User deleted" });
+      navigate("/admin/users");
+    } catch {
+      toast({ title: "Failed to delete user", variant: "destructive" });
     }
   }
 
@@ -185,6 +197,7 @@ export default function AdminUserDetail() {
 
         {/* Overview tab */}
         {tab === "overview" && (
+          <div className="space-y-5">
           <div className="grid gap-5 lg:grid-cols-2">
             {/* Profile info */}
             <div className="rounded-xl border border-border/60 bg-card p-5">
@@ -274,6 +287,60 @@ export default function AdminUserDetail() {
                 </div>
               </dl>
             </div>
+          </div>
+
+          {/* Danger Zone */}
+          <div className="rounded-xl border border-destructive/40 bg-card p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Danger Zone</h3>
+                <p className="text-xs text-muted-foreground">Irreversible actions — proceed with care</p>
+              </div>
+            </div>
+
+            {!deleteConfirm ? (
+              <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/50 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Delete this user</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Permanently removes the account and all associated data.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(true)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-destructive/50 px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete User
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-4">
+                <p className="text-sm font-medium text-foreground mb-1">Are you sure you want to delete <span className="font-semibold">{user.firstName} {user.lastName}</span>?</p>
+                <p className="text-xs text-muted-foreground mb-4">This action cannot be undone. The user and all their data will be permanently removed.</p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleteUser.isPending}
+                    className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                  >
+                    {deleteUser.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4" /> Yes, Delete User</>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm(false)}
+                    disabled={deleteUser.isPending}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           </div>
         )}
 
