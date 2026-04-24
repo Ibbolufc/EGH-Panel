@@ -185,13 +185,12 @@ export default function AdminUsers() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-0.5">
-                        <Link href={`/admin/users/${user.id}`}>
-                          <a
-                            className="rounded-md p-1.5 text-muted-foreground/50 hover:bg-white/8 hover:text-foreground transition-colors inline-flex items-center"
-                            title="View user detail"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </a>
+                        <Link
+                          href={`/admin/users/${user.id}`}
+                          className="rounded-md p-1.5 text-muted-foreground/50 hover:bg-white/8 hover:text-foreground transition-colors inline-flex items-center"
+                          title="View user detail"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
                         </Link>
                         <button
                           onClick={() => handleDelete(user.id)}

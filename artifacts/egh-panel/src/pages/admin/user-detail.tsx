@@ -124,7 +124,7 @@ export default function AdminUserDetail() {
       <AdminLayout title="User">
         <div className="space-y-6">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Link href="/admin/users"><a className="hover:text-foreground transition-colors">Users</a></Link>
+            <Link href="/admin/users" className="hover:text-foreground transition-colors">Users</Link>
             <ChevronRight className="h-3.5 w-3.5" />
             <Skeleton className="h-4 w-32 rounded" />
           </div>
@@ -141,9 +141,7 @@ export default function AdminUserDetail() {
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Users className="h-10 w-10 text-muted-foreground/40 mb-3" />
           <p className="text-sm font-medium text-foreground">User not found</p>
-          <Link href="/admin/users">
-            <a className="mt-3 text-xs text-primary hover:underline">Back to users</a>
-          </Link>
+          <Link href="/admin/users" className="mt-3 text-xs text-primary hover:underline">Back to users</Link>
         </div>
       </AdminLayout>
     );
@@ -156,9 +154,7 @@ export default function AdminUserDetail() {
       <div className="space-y-5">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Link href="/admin/users">
-            <a className="hover:text-foreground transition-colors">Users</a>
-          </Link>
+          <Link href="/admin/users" className="hover:text-foreground transition-colors">Users</Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="text-foreground font-medium">{user.firstName} {user.lastName}</span>
         </nav>
@@ -312,10 +308,8 @@ export default function AdminUserDetail() {
                             <ServerIcon className="h-3.5 w-3.5 text-primary" />
                           </div>
                           <div className="min-w-0">
-                            <Link href={`/admin/servers/${server.id}`}>
-                              <a className="font-medium text-foreground hover:text-primary transition-colors truncate block">
-                                {server.name}
-                              </a>
+                            <Link href={`/admin/servers/${server.id}`} className="font-medium text-foreground hover:text-primary transition-colors truncate block">
+                              {server.name}
                             </Link>
                             <div className="text-xs text-muted-foreground truncate">{server.description || "No description"}</div>
                           </div>

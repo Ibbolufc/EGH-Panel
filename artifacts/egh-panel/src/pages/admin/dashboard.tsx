@@ -137,10 +137,8 @@ export default function AdminDashboard() {
                 <Server className="h-4 w-4 text-primary" />
                 <h3 className="text-sm font-semibold text-foreground">Server Status</h3>
               </div>
-              <Link href="/admin/servers">
-                <a className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                  View all <ArrowRight className="h-3 w-3" />
-                </a>
+              <Link href="/admin/servers" className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                View all <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
             <div className="space-y-2.5">
@@ -162,9 +160,7 @@ export default function AdminDashboard() {
             {!isLoading && stats?.totalServers === 0 && (
               <div className="mt-4 rounded-lg border border-dashed border-border/40 py-4 text-center">
                 <p className="text-xs text-muted-foreground">No servers yet.</p>
-                <Link href="/admin/servers">
-                  <a className="mt-1 text-xs text-primary hover:underline">Create one →</a>
-                </Link>
+                <Link href="/admin/servers" className="mt-1 text-xs text-primary hover:underline">Create one →</Link>
               </div>
             )}
           </div>
@@ -177,13 +173,11 @@ export default function AdminDashboard() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               {quickActions.map((action) => (
-                <Link key={action.label} href={action.href}>
-                  <a className="group flex flex-col gap-0.5 rounded-lg border border-border/50 bg-white/3 px-3 py-2.5 transition-colors hover:border-primary/30 hover:bg-primary/5">
-                    <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-                      {action.label}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">{action.desc}</span>
-                  </a>
+                <Link key={action.label} href={action.href} className="group flex flex-col gap-0.5 rounded-lg border border-border/50 bg-white/3 px-3 py-2.5 transition-colors hover:border-primary/30 hover:bg-primary/5">
+                  <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                    {action.label}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">{action.desc}</span>
                 </Link>
               ))}
             </div>
@@ -197,10 +191,8 @@ export default function AdminDashboard() {
               <Activity className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-semibold text-foreground">Recent Activity</h3>
             </div>
-            <Link href="/admin/activity">
-              <a className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                View all <ArrowRight className="h-3 w-3" />
-              </a>
+            <Link href="/admin/activity" className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+              View all <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
           <div className="divide-y divide-border/40">

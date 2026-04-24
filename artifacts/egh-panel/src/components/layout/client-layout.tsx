@@ -84,19 +84,17 @@ export function ClientLayout({ children, title }: ClientLayoutProps) {
                   : location.startsWith(item.href);
                 return (
                   <li key={item.href}>
-                    <Link href={item.href}>
-                      <a className={cn(
-                        "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150",
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:bg-white/4 hover:text-foreground"
-                      )}>
-                        {isActive && (
-                          <span className="absolute left-0 inset-y-1 w-0.5 rounded-r-full bg-primary" />
-                        )}
-                        <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-                        {item.label}
-                      </a>
+                    <Link href={item.href} className={cn(
+                      "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-white/4 hover:text-foreground"
+                    )}>
+                      {isActive && (
+                        <span className="absolute left-0 inset-y-1 w-0.5 rounded-r-full bg-primary" />
+                      )}
+                      <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                      {item.label}
                     </Link>
                   </li>
                 );
@@ -119,19 +117,17 @@ export function ClientLayout({ children, title }: ClientLayoutProps) {
                     : location.startsWith(href);
                   return (
                     <li key={item.segment}>
-                      <Link href={href}>
-                        <a className={cn(
-                          "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150",
-                          isActive
-                            ? "bg-primary/10 text-primary"
-                            : "text-muted-foreground hover:bg-white/4 hover:text-foreground"
-                        )}>
-                          {isActive && (
-                            <span className="absolute left-0 inset-y-1 w-0.5 rounded-r-full bg-primary" />
-                          )}
-                          <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-                          {item.label}
-                        </a>
+                      <Link href={href} className={cn(
+                        "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-white/4 hover:text-foreground"
+                      )}>
+                        {isActive && (
+                          <span className="absolute left-0 inset-y-1 w-0.5 rounded-r-full bg-primary" />
+                        )}
+                        <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                        {item.label}
                       </Link>
                     </li>
                   );
@@ -150,19 +146,17 @@ export function ClientLayout({ children, title }: ClientLayoutProps) {
                   const isSelected = currentServerId === String(server.id);
                   return (
                     <li key={server.id}>
-                      <Link href={`/client/servers/${server.id}`}>
-                        <a className={cn(
-                          "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-all duration-150",
-                          isSelected
-                            ? "bg-primary/10 text-primary"
-                            : "text-muted-foreground hover:bg-white/4 hover:text-foreground"
-                        )}>
-                          {isSelected && (
-                            <span className="absolute left-0 inset-y-1 w-0.5 rounded-r-full bg-primary" />
-                          )}
-                          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotClass)} />
-                          <span className="truncate">{server.name}</span>
-                        </a>
+                      <Link href={`/client/servers/${server.id}`} className={cn(
+                        "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-all duration-150",
+                        isSelected
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-white/4 hover:text-foreground"
+                      )}>
+                        {isSelected && (
+                          <span className="absolute left-0 inset-y-1 w-0.5 rounded-r-full bg-primary" />
+                        )}
+                        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotClass)} />
+                        <span className="truncate">{server.name}</span>
                       </Link>
                     </li>
                   );

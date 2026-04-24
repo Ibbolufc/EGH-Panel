@@ -188,10 +188,8 @@ export default function AdminEggs() {
                                 <Egg className="h-3.5 w-3.5 text-orange-400" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <Link href={`/admin/eggs/${egg.id}`}>
-                                  <a className="text-sm font-medium text-foreground hover:text-primary transition-colors">
-                                    {egg.name}
-                                  </a>
+                                <Link href={`/admin/eggs/${egg.id}`} className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+                                  {egg.name}
                                 </Link>
                                 <p className="text-xs text-muted-foreground truncate mt-0.5">
                                   {egg.description || "No description"}

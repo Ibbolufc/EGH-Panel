@@ -134,7 +134,7 @@ export default function AdminServerDetail() {
       <AdminLayout title="Server">
         <div className="space-y-6">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Link href="/admin/servers"><a className="hover:text-foreground transition-colors">Servers</a></Link>
+            <Link href="/admin/servers" className="hover:text-foreground transition-colors">Servers</Link>
             <ChevronRight className="h-3.5 w-3.5" />
             <Skeleton className="h-4 w-32 rounded" />
           </div>
@@ -151,9 +151,7 @@ export default function AdminServerDetail() {
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Server className="h-10 w-10 text-muted-foreground/40 mb-3" />
           <p className="text-sm font-medium text-foreground">Server not found</p>
-          <Link href="/admin/servers">
-            <a className="mt-3 text-xs text-primary hover:underline">Back to servers</a>
-          </Link>
+          <Link href="/admin/servers" className="mt-3 text-xs text-primary hover:underline">Back to servers</Link>
         </div>
       </AdminLayout>
     );
@@ -164,9 +162,7 @@ export default function AdminServerDetail() {
       <div className="space-y-5">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Link href="/admin/servers">
-            <a className="hover:text-foreground transition-colors">Servers</a>
-          </Link>
+          <Link href="/admin/servers" className="hover:text-foreground transition-colors">Servers</Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="text-foreground font-medium">{server.name}</span>
         </nav>
@@ -217,17 +213,13 @@ export default function AdminServerDetail() {
               <SectionHeader icon={Globe} title="Assignment" subtitle="Node, egg, and owner" />
               <dl className="space-y-0">
                 <InfoRow label="Owner" value={
-                  <Link href={`/admin/users/${server.userId}`}>
-                    <a className="text-primary hover:underline flex items-center gap-1.5">
-                      <User className="h-3.5 w-3.5" />{server.userEmail}
-                    </a>
+                  <Link href={`/admin/users/${server.userId}`} className="text-primary hover:underline flex items-center gap-1.5">
+                    <User className="h-3.5 w-3.5" />{server.userEmail}
                   </Link>
                 } />
                 <InfoRow label="Node" value={
-                  <Link href={`/admin/nodes/${server.nodeId}`}>
-                    <a className="text-primary hover:underline flex items-center gap-1.5">
-                      <Network className="h-3.5 w-3.5" />{server.nodeName || `Node #${server.nodeId}`}
-                    </a>
+                  <Link href={`/admin/nodes/${server.nodeId}`} className="text-primary hover:underline flex items-center gap-1.5">
+                    <Network className="h-3.5 w-3.5" />{server.nodeName || `Node #${server.nodeId}`}
                   </Link>
                 } />
                 <InfoRow label="Egg" value={

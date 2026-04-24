@@ -29,26 +29,25 @@ interface AdminLayoutProps {
 function NavItem({ item, isActive }: { item: typeof mainNavItems[0]; isActive: boolean }) {
   return (
     <li>
-      <Link href={item.href}>
-        <a
-          className={cn(
-            "group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-150",
-            isActive
-              ? "bg-primary/12 font-semibold text-primary"
-              : "font-medium text-muted-foreground/80 hover:bg-white/5 hover:text-foreground"
-          )}
-          data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-        >
-          {isActive && (
-            <span className="absolute left-0 inset-y-1.5 w-0.5 rounded-r-full bg-primary shadow-[0_0_6px] shadow-primary/50" />
-          )}
-          <item.icon className={cn(
-            "h-4 w-4 shrink-0 transition-colors",
-            isActive ? "text-primary" : "text-muted-foreground/60 group-hover:text-foreground"
-          )} />
-          <span className="flex-1 truncate">{item.label}</span>
-          {isActive && <ChevronRight className="h-3 w-3 text-primary/40 shrink-0" />}
-        </a>
+      <Link
+        href={item.href}
+        className={cn(
+          "group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-150",
+          isActive
+            ? "bg-primary/12 font-semibold text-primary"
+            : "font-medium text-muted-foreground/80 hover:bg-white/5 hover:text-foreground"
+        )}
+        data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+      >
+        {isActive && (
+          <span className="absolute left-0 inset-y-1.5 w-0.5 rounded-r-full bg-primary shadow-[0_0_6px] shadow-primary/50" />
+        )}
+        <item.icon className={cn(
+          "h-4 w-4 shrink-0 transition-colors",
+          isActive ? "text-primary" : "text-muted-foreground/60 group-hover:text-foreground"
+        )} />
+        <span className="flex-1 truncate">{item.label}</span>
+        {isActive && <ChevronRight className="h-3 w-3 text-primary/40 shrink-0" />}
       </Link>
     </li>
   );

@@ -89,7 +89,7 @@ export default function AdminEggDetail() {
       <AdminLayout title="Egg">
         <div className="space-y-6">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Link href="/admin/eggs"><a className="hover:text-foreground transition-colors">Eggs &amp; Nests</a></Link>
+            <Link href="/admin/eggs" className="hover:text-foreground transition-colors">Eggs &amp; Nests</Link>
             <ChevronRight className="h-3.5 w-3.5" />
             <Skeleton className="h-4 w-32 rounded" />
           </div>
@@ -106,9 +106,7 @@ export default function AdminEggDetail() {
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Egg className="h-10 w-10 text-muted-foreground/40 mb-3" />
           <p className="text-sm font-medium text-foreground">Egg not found</p>
-          <Link href="/admin/eggs">
-            <a className="mt-3 text-xs text-primary hover:underline">Back to eggs &amp; nests</a>
-          </Link>
+          <Link href="/admin/eggs" className="mt-3 text-xs text-primary hover:underline">Back to eggs &amp; nests</Link>
         </div>
       </AdminLayout>
     );
@@ -121,9 +119,7 @@ export default function AdminEggDetail() {
       <div className="space-y-5">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Link href="/admin/eggs">
-            <a className="hover:text-foreground transition-colors">Eggs &amp; Nests</a>
-          </Link>
+          <Link href="/admin/eggs" className="hover:text-foreground transition-colors">Eggs &amp; Nests</Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="text-foreground font-medium">{egg.nestName}</span>
           <ChevronRight className="h-3.5 w-3.5" />

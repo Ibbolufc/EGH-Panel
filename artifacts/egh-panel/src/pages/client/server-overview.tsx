@@ -185,16 +185,14 @@ export default function ServerOverview() {
               { href: `/client/servers/${id}/startup`,   icon: Play,       label: "Startup",  desc: "Variables" },
               { href: `/client/servers/${id}/backups`,   icon: Server,     label: "Backups",  desc: "Snapshots" },
             ].map((link) => (
-              <Link key={link.href} href={link.href}>
-                <a className="group flex flex-col gap-0.5 rounded-lg border border-border/50 bg-white/3 px-3 py-2.5 transition-colors hover:border-primary/30 hover:bg-primary/5">
-                  <div className="flex items-center gap-1.5">
-                    <link.icon className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-                      {link.label}
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-muted-foreground">{link.desc}</span>
-                </a>
+              <Link key={link.href} href={link.href} className="group flex flex-col gap-0.5 rounded-lg border border-border/50 bg-white/3 px-3 py-2.5 transition-colors hover:border-primary/30 hover:bg-primary/5">
+                <div className="flex items-center gap-1.5">
+                  <link.icon className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                    {link.label}
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted-foreground">{link.desc}</span>
               </Link>
             ))}
           </div>

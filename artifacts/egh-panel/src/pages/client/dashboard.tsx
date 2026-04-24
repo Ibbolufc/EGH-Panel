@@ -64,11 +64,12 @@ export default function ClientDashboard() {
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
             {servers.map((server: any) => (
-              <Link key={server.id} href={`/client/servers/${server.id}`}>
-                <a
-                  className="group block rounded-xl border border-border/60 bg-card p-5 shadow-sm hover:border-primary/30 hover:shadow-primary/5 hover:shadow-md transition-all duration-200"
-                  data-testid={`card-server-${server.id}`}
-                >
+              <Link
+                key={server.id}
+                href={`/client/servers/${server.id}`}
+                className="group block rounded-xl border border-border/60 bg-card p-5 shadow-sm hover:border-primary/30 hover:shadow-primary/5 hover:shadow-md transition-all duration-200"
+                data-testid={`card-server-${server.id}`}
+              >
                   {/* Server header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3 min-w-0">
@@ -111,7 +112,6 @@ export default function ClientDashboard() {
                       </div>
                     ))}
                   </div>
-                </a>
               </Link>
             ))}
           </div>
