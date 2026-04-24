@@ -13,10 +13,12 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { generateInstallScript } from "@/lib/install-script";
 import {
   ChevronRight, MemoryStick, HardDrive, Server as ServerIcon,
   MapPin, Globe, Plus, Trash2, Loader2, Save, Network,
   FileText, Settings, Activity, Wifi, CheckCircle2, XCircle,
+  Download, Copy, Check, AlertTriangle, RefreshCw, Terminal,
 } from "lucide-react";
 
 // The API returns extra fields not yet reflected in the generated schema.
@@ -383,7 +385,36 @@ function TabBtn({
   );
 }
 
-type TabId = "overview" | "allocations" | "servers" | "settings";
+type TabId = "overview" | "allocations" | "servers" | "install" | "settings";
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem("egh_token");
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) h["Authorization"] = `Bearer ${token}`;
+  return h;
+}
+
+function CopyBtn({ text, label = "Copy", size = "sm" }: { text: string; label?: string; size?: "xs" | "sm" }) {
+  const [copied, setCopied] = useState(false);
+  async function handleCopy() {
+    try { await navigator.clipboard.writeText(text); } catch {
+      const el = document.createElement("textarea");
+      el.value = text; document.body.appendChild(el); el.select();
+      document.execCommand("copy"); document.body.removeChild(el);
+    }
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <button onClick={handleCopy} className={cn(
+      "inline-flex items-center gap-1.5 rounded-md border font-medium transition-colors",
+      copied ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" : "border-border/60 bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground",
+      size === "xs" ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-xs"
+    )}>
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {copied ? "Copied!" : label}
+    </button>
+  );
+}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function NodeDetailPage() {
@@ -392,6 +423,7 @@ export default function NodeDetailPage() {
   const [tab, setTab] = useState<TabId>("overview");
   const [deletingAllocId, setDeletingAllocId] = useState<number | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const [regenPending, setRegenPending] = useState(false);
   const [testResult, setTestResult] = useState<{
     reachable: boolean;
     error?: string;
@@ -412,7 +444,7 @@ export default function NodeDetailPage() {
     setIsTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch(`/api/nodes/${id}/test-connection`, { method: "POST" });
+      const res = await fetch(`/api/nodes/${id}/test-connection`, { method: "POST", headers: authHeaders() });
       const data = await res.json() as typeof testResult;
       setTestResult(data);
       if (data?.reachable) {
@@ -422,6 +454,19 @@ export default function NodeDetailPage() {
       setTestResult({ reachable: false, error: "Request failed — check panel network connectivity" });
     } finally {
       setIsTesting(false);
+    }
+  }
+
+  async function handleRegenToken() {
+    setRegenPending(true);
+    try {
+      await fetch(`/api/nodes/${id}/regen-token`, { method: "POST", headers: authHeaders() });
+      refetchNode();
+      toast({ title: "Token regenerated", description: "The previous install command is now invalid." });
+    } catch {
+      toast({ title: "Failed to regenerate token", variant: "destructive" });
+    } finally {
+      setRegenPending(false);
     }
   }
 
@@ -547,6 +592,7 @@ export default function NodeDetailPage() {
           <TabBtn active={tab === "overview"}     onClick={() => setTab("overview")}     icon={Activity}    label="Resources"    />
           <TabBtn active={tab === "allocations"}  onClick={() => setTab("allocations")}  icon={Network}     label="Allocations"  />
           <TabBtn active={tab === "servers"}      onClick={() => setTab("servers")}      icon={ServerIcon}  label="Servers"      />
+          <TabBtn active={tab === "install"}      onClick={() => setTab("install")}      icon={Download}    label="Install"      />
           <TabBtn active={tab === "settings"}     onClick={() => setTab("settings")}     icon={Settings}    label="Settings"     />
         </div>
 
@@ -766,6 +812,128 @@ export default function NodeDetailPage() {
             )}
           </div>
         )}
+
+        {/* ── INSTALL TAB ─────────────────────────────────────────────────── */}
+        {tab === "install" && (() => {
+          const panelUrl = window.location.origin;
+          const token = node.registrationToken;
+          const script = token
+            ? generateInstallScript({
+                panelUrl,
+                nodeId: node.id,
+                nodeName: node.name,
+                nodeFqdn: node.fqdn,
+                daemonPort: node.daemonPort,
+                scheme: node.scheme,
+                registrationToken: token,
+              })
+            : null;
+
+          return (
+            <div className="space-y-4">
+              {/* Warning banner */}
+              <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-4 py-3.5">
+                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-200/80">
+                  <span className="font-semibold text-amber-300">Run this command on the target node machine — not on your EGH Panel server.</span>
+                  {" "}SSH into the node as root, then paste and run the script below. It will install Docker, download the EGH Node agent, and link this node back to your panel automatically.
+                </div>
+              </div>
+
+              {/* Token section */}
+              <div className="rounded-xl border border-border/60 bg-card p-5">
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <SectionHeader
+                    icon={Terminal}
+                    title="EGH Node Install"
+                    subtitle={`Node: ${node.name} · ${node.scheme}://${node.fqdn}:${node.daemonPort}`}
+                  />
+                  <button
+                    onClick={handleRegenToken}
+                    disabled={regenPending}
+                    className="shrink-0 inline-flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors disabled:opacity-50"
+                  >
+                    {regenPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Regenerate Token
+                  </button>
+                </div>
+
+                {/* Registration token display */}
+                <div className="mb-4 rounded-lg border border-border/50 bg-white/2 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">Registration Token</p>
+                  {token ? (
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs text-foreground font-mono break-all flex-1">{token}</code>
+                      <CopyBtn text={token} size="xs" />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <p className="text-xs text-muted-foreground/60 flex-1">No token generated yet. Click "Regenerate Token" to create one.</p>
+                      <button
+                        onClick={handleRegenToken}
+                        disabled={regenPending}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50"
+                      >
+                        {regenPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                        Generate Token
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Install script */}
+                {script ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Install Script</p>
+                      <CopyBtn text={script} label="Copy full script" />
+                    </div>
+                    <div className="relative overflow-hidden rounded-lg border border-border/40 bg-[hsl(225,20%,4%)]">
+                      <div className="flex items-center justify-between border-b border-border/30 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1">
+                            <span className="h-2.5 w-2.5 rounded-full bg-red-500/60" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-amber-500/60" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/60" />
+                          </div>
+                          <span className="text-[10px] text-muted-foreground/50 font-mono">install-egh-node.sh — {node.name}</span>
+                        </div>
+                        <CopyBtn text={script} size="xs" />
+                      </div>
+                      <pre className="overflow-x-auto p-4 text-[11px] leading-relaxed font-mono text-emerald-300/90 max-h-72">
+                        <code>{script}</code>
+                      </pre>
+                    </div>
+                    <p className="text-xs text-muted-foreground/60 text-center">
+                      This node will appear as <span className="text-emerald-400 font-medium">Online</span> in the panel once EGH Node connects back successfully.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border/40 py-10 text-center">
+                    <Download className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                    <p className="text-sm text-muted-foreground">Generate a token first to see the install script</p>
+                    <p className="text-xs text-muted-foreground/60 mt-0.5">Click "Generate Token" above to create the install command</p>
+                  </div>
+                )}
+
+                {/* Connection details grid */}
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  {[
+                    { label: "Panel URL",    value: panelUrl },
+                    { label: "Node FQDN",   value: node.fqdn },
+                    { label: "Daemon Port", value: String(node.daemonPort) },
+                    { label: "Scheme",      value: node.scheme },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-lg border border-border/50 bg-white/2 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-1">{item.label}</p>
+                      <code className="text-xs text-foreground break-all">{item.value}</code>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── SETTINGS TAB ────────────────────────────────────────────────── */}
         {tab === "settings" && (
