@@ -692,7 +692,6 @@ export default function AdminNodes() {
   return (
     <AdminLayout title="Nodes">
       <div className="space-y-4">
-        {/* Page header */}
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground">Nodes</h2>
@@ -748,7 +747,7 @@ export default function AdminNodes() {
                   <Skeleton className="h-5 w-16 rounded-md" />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {[1,2,3].map(j => <Skeleton key={j} className="h-14 rounded-lg" />)}
+                  {[1, 2, 3].map((j) => <Skeleton key={j} className="h-14 rounded-lg" />)}
                 </div>
               </div>
             ))}
@@ -766,6 +765,7 @@ export default function AdminNodes() {
                   <p className="text-xs text-muted-foreground">Follow these steps to connect your first node</p>
                 </div>
               </div>
+
               <ol className="space-y-4">
                 {[
                   { n: "1", title: "Provision a Linux server", desc: "Any VPS or dedicated machine. Ubuntu 22.04+ with 2+ vCPUs and 2+ GB RAM recommended." },
@@ -784,6 +784,7 @@ export default function AdminNodes() {
                   </li>
                 ))}
               </ol>
+
               <div className="mt-4 pt-4 border-t border-border/40">
                 <button
                   onClick={() => setShowCreate(true)}
@@ -802,6 +803,7 @@ export default function AdminNodes() {
                   A node is a physical or virtual server running the EGH Node agent. EGH Panel connects to EGH Node to deploy and manage game server containers on that machine.
                 </p>
               </div>
+
               <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Requirements</p>
                 <ul className="space-y-2">
