@@ -935,8 +935,29 @@ export default function NodeDetailPage() {
                 {/* Install script */}
                 {script ? (
                   <div className="space-y-3">
+                    {/* Quick Install one-liner */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Quick Install</p>
+                        <CopyBtn text={`curl -fsSL "${panelUrl}/api/nodes/${node.id}/install.sh?token=${token}" | sudo bash`} label="Copy command" />
+                      </div>
+                      <div className="relative overflow-hidden rounded-lg border border-primary/30 bg-[hsl(225,20%,4%)]">
+                        <div className="flex items-center justify-between border-b border-border/30 px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <Terminal className="h-3 w-3 text-primary/60" />
+                            <span className="text-[10px] text-muted-foreground/50 font-mono">node-{node.id} — one-liner</span>
+                          </div>
+                          <CopyBtn text={`curl -fsSL "${panelUrl}/api/nodes/${node.id}/install.sh?token=${token}" | sudo bash`} size="xs" />
+                        </div>
+                        <pre className="overflow-x-auto px-4 py-3 text-[11px] leading-relaxed font-mono text-primary/90 whitespace-pre-wrap break-all">
+                          <code>{`curl -fsSL "${panelUrl}/api/nodes/${node.id}/install.sh?token=${token}" | sudo bash`}</code>
+                        </pre>
+                      </div>
+                    </div>
+
+                    {/* Full install script */}
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Install Script</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Full Install Script</p>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"

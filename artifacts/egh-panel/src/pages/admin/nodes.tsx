@@ -136,10 +136,33 @@ function InstallCommandModal({
             </div>
           </div>
 
-          {/* Quick Install section */}
+          {/* Quick Install one-liner (primary method) */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Quick Install Script</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Quick Install</p>
+              <CopyButton text={oneLiner} label="Copy command" />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Run this single command as root on your node — it downloads and executes the install script automatically.
+            </p>
+            <div className="relative overflow-hidden rounded-lg border border-primary/30 bg-[hsl(225,20%,4%)]">
+              <div className="flex items-center justify-between border-b border-border/30 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Terminal className="h-3 w-3 text-primary/60" />
+                  <span className="text-[10px] text-muted-foreground/50 font-mono">node-{node.id} — one-liner</span>
+                </div>
+                <CopyButton text={oneLiner} size="xs" />
+              </div>
+              <pre className="overflow-x-auto px-4 py-3 text-[11px] leading-relaxed font-mono text-primary/90 whitespace-pre-wrap break-all">
+                <code>{oneLiner}</code>
+              </pre>
+            </div>
+          </div>
+
+          {/* Full script (secondary/download option) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Full Install Script</p>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
@@ -159,9 +182,6 @@ function InstallCommandModal({
                 <CopyButton text={script} label="Copy full script" />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Paste and run this complete script as root on your node. It installs Docker (if missing), downloads EGH Node, writes the configuration, and starts the agent service.
-            </p>
             <div className="relative overflow-hidden rounded-lg border border-border/40 bg-[hsl(225,20%,4%)]">
               <div className="flex items-center justify-between border-b border-border/30 px-3 py-2">
                 <div className="flex items-center gap-2">
@@ -485,9 +505,10 @@ function AddNodeModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
 
 // ── Shared install command content (used in both modal and post-create) ────────
 function InstallCommandContent({ node }: { node: any }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
 
   const panelUrl = window.location.origin;
+  const oneLiner = `curl -fsSL "${panelUrl}/api/nodes/${node.id}/install.sh?token=${node.registrationToken}" | sudo bash`;
   const script = generateInstallScript({
     panelUrl,
     nodeId: node.id,
@@ -498,7 +519,7 @@ function InstallCommandContent({ node }: { node: any }) {
     registrationToken: node.registrationToken ?? "",
   });
 
-  async function handleCopy() {
+  async function handleCopyScript() {
     try {
       await navigator.clipboard.writeText(script);
     } catch {
@@ -509,8 +530,8 @@ function InstallCommandContent({ node }: { node: any }) {
       document.execCommand("copy");
       document.body.removeChild(el);
     }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedScript(true);
+    setTimeout(() => setCopiedScript(false), 2000);
   }
 
   return (
@@ -523,33 +544,59 @@ function InstallCommandContent({ node }: { node: any }) {
         </p>
       </div>
 
-      <div className="relative overflow-hidden rounded-lg border border-border/40 bg-[hsl(225,20%,4%)]">
-        <div className="flex items-center justify-between border-b border-border/30 px-3 py-2">
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1">
-              <span className="h-2 w-2 rounded-full bg-red-500/50" />
-              <span className="h-2 w-2 rounded-full bg-amber-500/50" />
-              <span className="h-2 w-2 rounded-full bg-emerald-500/50" />
-            </div>
-            <Terminal className="h-3 w-3 text-muted-foreground/40" />
-            <span className="text-[10px] text-muted-foreground/50 font-mono">install-egh-node.sh — {node.name}</span>
-          </div>
-          <button
-            onClick={handleCopy}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium transition-colors",
-              copied
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                : "border-border/50 bg-white/5 text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            {copied ? "Copied!" : "Copy"}
-          </button>
+      {/* Quick Install one-liner */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Quick Install</p>
+          <CopyButton text={oneLiner} label="Copy command" />
         </div>
-        <pre className="overflow-x-auto p-4 text-[11px] leading-relaxed font-mono text-emerald-300/90 max-h-52">
-          <code>{script}</code>
-        </pre>
+        <div className="relative overflow-hidden rounded-lg border border-primary/30 bg-[hsl(225,20%,4%)]">
+          <div className="flex items-center justify-between border-b border-border/30 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <Terminal className="h-3 w-3 text-primary/60" />
+              <span className="text-[10px] text-muted-foreground/50 font-mono">node-{node.id} — one-liner</span>
+            </div>
+            <CopyButton text={oneLiner} size="xs" />
+          </div>
+          <pre className="overflow-x-auto px-4 py-3 text-[11px] leading-relaxed font-mono text-primary/90 whitespace-pre-wrap break-all">
+            <code>{oneLiner}</code>
+          </pre>
+        </div>
+      </div>
+
+      {/* Full script (reference/download) */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Full Install Script</p>
+        </div>
+        <div className="relative overflow-hidden rounded-lg border border-border/40 bg-[hsl(225,20%,4%)]">
+          <div className="flex items-center justify-between border-b border-border/30 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1">
+                <span className="h-2 w-2 rounded-full bg-red-500/50" />
+                <span className="h-2 w-2 rounded-full bg-amber-500/50" />
+                <span className="h-2 w-2 rounded-full bg-emerald-500/50" />
+              </div>
+              <Terminal className="h-3 w-3 text-muted-foreground/40" />
+              <span className="text-[10px] text-muted-foreground/50 font-mono">install-egh-node.sh — {node.name}</span>
+            </div>
+            <button
+              onClick={handleCopyScript}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium transition-colors",
+                copiedScript
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                  : "border-border/50 bg-white/5 text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {copiedScript ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              {copiedScript ? "Copied!" : "Copy"}
+            </button>
+          </div>
+          <pre className="overflow-x-auto p-4 text-[11px] leading-relaxed font-mono text-emerald-300/90 max-h-52">
+            <code>{script}</code>
+          </pre>
+        </div>
       </div>
 
       <p className="text-xs text-muted-foreground/60 text-center">
