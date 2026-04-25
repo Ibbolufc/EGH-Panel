@@ -13,18 +13,28 @@ app.set("trust proxy", 1);
 app.set("etag", false);
 
 app.use((req, res, next) => {
+  // Prevent browsers/proxies from sending conditional cache validators
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
+
+  // Remove any cache validator headers and disable caching for API responses
+  res.removeHeader("ETag");
+  res.removeHeader("Last-Modified");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
+
   next();
 });
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
 
-app.use(cors({
-  origin: process.env["CORS_ORIGIN"] ?? true,
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: process.env["CORS_ORIGIN"] ?? true,
+    credentials: true,
+  }),
+);
 
 app.use(
   pinoHttp({
