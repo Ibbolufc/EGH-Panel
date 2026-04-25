@@ -30,7 +30,7 @@ export function setBaseUrl(url: string | null): void {
 }
 
 /**
- * Register a getter that supplies a bearer auth token.  Before every fetch
+ * Register a getter that supplies a bearer auth token. Before every fetch
  * the getter is invoked; when it returns a non-null string, an
  * `Authorization: Bearer <token>` header is attached to the request.
  *
@@ -78,6 +78,37 @@ function resolveUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
+function appendCacheBust(input: RequestInfo | URL, method: string): RequestInfo | URL {
+  if (method !== "GET") return input;
+
+  const original = resolveUrl(input);
+
+  // Only cache-bust API requests.
+  let url: URL;
+  try {
+    const base =
+      typeof window !== "undefined" && window.location?.origin
+        ? window.location.origin
+        : "http://localhost";
+    url = new URL(original, base);
+  } catch {
+    return input;
+  }
+
+  if (!url.pathname.startsWith("/api/")) {
+    return input;
+  }
+
+  url.searchParams.set("_ts", Date.now().toString());
+
+  const isAbsolute = /^https?:\/\//i.test(original);
+  const nextUrl = isAbsolute ? url.toString() : `${url.pathname}${url.search}`;
+
+  if (typeof input === "string") return nextUrl;
+  if (isUrl(input)) return new URL(url.toString());
+  return new Request(nextUrl, input as Request);
+}
+
 function mergeHeaders(...sources: Array<HeadersInit | undefined>): Headers {
   const headers = new Headers();
 
@@ -112,10 +143,10 @@ function isTextMediaType(mediaType: string | null): boolean {
 }
 
 // Use strict equality: in browsers, `response.body` is `null` when the
-// response genuinely has no content.  In React Native, `response.body` is
+// response genuinely has no content. In React Native, `response.body` is
 // always `undefined` because the ReadableStream API is not implemented —
 // even when the response carries a full payload readable via `.text()` or
-// `.json()`.  Loose equality (`== null`) matches both `null` and `undefined`,
+// `.json()`. Loose equality (`== null`) matches both `null` and `undefined`,
 // which causes every React Native response to be treated as empty.
 function hasNoBody(response: Response, method: string): boolean {
   if (method === "HEAD") return true;
@@ -314,8 +345,7 @@ async function parseSuccessBody(
     case "blob":
       if (typeof response.blob !== "function") {
         throw new TypeError(
-          "Blob responses are not supported in this runtime. " +
-            'Use responseType "json" or "text" instead.',
+          'Blob responses are not supported in this runtime. Use responseType "json" or "text" instead.',
         );
       }
       return response.blob();
@@ -330,6 +360,7 @@ export async function customFetch<T = unknown>(
   const { responseType = "auto", headers: headersInit, ...init } = options;
 
   const method = resolveMethod(input, init.method);
+  input = appendCacheBust(input, method);
 
   if (init.body != null && (method === "GET" || method === "HEAD")) {
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
@@ -349,8 +380,6 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  // Attach bearer token when an auth getter is configured and no
-  // Authorization header has been explicitly provided.
   if (_authTokenGetter && !headers.has("authorization")) {
     const token = await _authTokenGetter();
     if (token) {
@@ -369,7 +398,7 @@ export async function customFetch<T = unknown>(
     ...init,
     method,
     headers,
-    cache: init.cache ?? "no-store",
+    cache: "no-store",
   });
 
   if (!response.ok) {
