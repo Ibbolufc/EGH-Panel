@@ -3,12 +3,12 @@ set -Eeuo pipefail
 
 log() {
   echo
-  echo "==> $1"
+  echo "[update] $1"
 }
 
 die() {
   echo
-  echo "ERROR: $1" >&2
+  echo "[update] ERROR: $1" >&2
   exit 1
 }
 
@@ -17,17 +17,9 @@ cd "$ROOT_DIR"
 
 [ -f "docker-compose.yml" ] || die "docker-compose.yml not found. Run this from a valid EGH-Panel checkout."
 
-if ! command -v docker >/dev/null 2>&1; then
-  die "Docker is not installed."
-fi
-
-if ! docker info >/dev/null 2>&1; then
-  die "Docker daemon is not running or not accessible."
-fi
-
-if ! command -v git >/dev/null 2>&1; then
-  die "Git is not installed."
-fi
+command -v docker >/dev/null 2>&1 || die "Docker is not installed."
+command -v git >/dev/null 2>&1 || die "Git is not installed."
+docker info >/dev/null 2>&1 || die "Docker daemon is not running or not accessible."
 
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.41}"
 export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-0}"
@@ -37,7 +29,7 @@ CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
 
 log "Checking working tree"
 if [ -n "$(git status --porcelain)" ]; then
-  die "You have uncommitted changes in ~/EGH-Panel. Commit/stash them first, then run update again."
+  die "You have uncommitted changes in ~/EGH-Panel. Commit or stash them first."
 fi
 
 log "Fetching latest code"
@@ -46,26 +38,26 @@ git fetch origin "$CURRENT_BRANCH"
 log "Pulling latest code"
 git pull --ff-only origin "$CURRENT_BRANCH"
 
-log "Starting core services"
+log "Ensuring database services are up"
 docker compose up -d postgres redis
 
-log "Building fresh images"
+log "Rebuilding API and frontend images"
 docker compose build --no-cache api frontend nginx
 
-log "Running database schema update"
-if docker compose run --rm api pnpm --filter @workspace/db run push; then
-  echo "Database schema update completed."
+log "Running database schema sync"
+if docker compose run --rm api pnpm --filter @workspace/db run push-force; then
+  echo "[update] Database schema sync completed."
 else
-  die "Database schema update failed. Fix that first before continuing."
+  die "Database schema sync failed."
 fi
 
-log "Recreating application containers"
-docker compose up -d --force-recreate api frontend nginx
+log "Force recreating application containers"
+docker compose up -d --force-recreate --no-deps api frontend nginx
 
-log "Cleaning orphaned EGH containers"
+log "Ensuring full stack is up"
 docker compose up -d --remove-orphans
 
-log "Showing container status"
+log "Current container status"
 docker compose ps
 
 echo
