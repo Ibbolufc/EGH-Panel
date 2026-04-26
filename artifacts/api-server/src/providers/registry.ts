@@ -3,14 +3,12 @@
  *
  * Resolves the correct INodeProvider implementation for a given node.
  *
- * Selection logic:
- *   - WingsProvider  → node has a daemonToken AND EGH_MOCK_PROVIDER != "true"
- *   - MockProvider   → fallback (dev, testing, or nodes without tokens)
+ * Current selection logic:
+ *   - live provider path when a node has a daemon token and mock mode is not forced
+ *   - mock provider fallback for development/testing
  *
- * To force mock in any environment:  EGH_MOCK_PROVIDER=true
- * To use real Wings in development:  ensure node.daemonToken is set
- *   (it is populated automatically from registrationToken when building
- *    a ProviderNode — see serverService.ts)
+ * To force mock in any environment:
+ *   EGH_MOCK_PROVIDER=true
  */
 
 import type { INodeProvider, ProviderNode } from "./types";
