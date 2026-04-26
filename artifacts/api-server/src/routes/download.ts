@@ -4,16 +4,9 @@ import http from "http";
 
 const router: Router = Router();
 
-/**
- * Pinned EGH Node (Wings) binary version.
- * Change this constant and redeploy to update the binary version served to nodes.
- */
-export const PINNED_VERSION = "v1.11.13";
+export const PINNED_VERSION = "v0.1.0";
+export const PINNED_ASSET = "egh-node-linux-amd64";
 
-/**
- * GitHub release downloads may redirect through a few different asset hosts.
- * We allow only known GitHub-owned hosts here.
- */
 const ALLOWED_REDIRECT_HOSTS = [
   "github.com",
   "githubusercontent.com",
@@ -26,8 +19,8 @@ const ALLOWED_REDIRECT_HOSTS = [
 
 const DOWNLOAD_TIMEOUT_MS = 30_000;
 
-function buildWingsUrl(): string {
-  return `https://github.com/pterodactyl/wings/releases/download/${PINNED_VERSION}/wings_linux_amd64`;
+function buildNodeBinaryUrl(): string {
+  return `https://github.com/Ibbolufc/EGH-Node/releases/download/${PINNED_VERSION}/${PINNED_ASSET}`;
 }
 
 function isAllowedHost(url: string): boolean {
@@ -116,7 +109,7 @@ function fetchWithRedirects(
 }
 
 router.get("/download/egh-node", (_req, res): void => {
-  fetchWithRedirects(buildWingsUrl(), res);
+  fetchWithRedirects(buildNodeBinaryUrl(), res);
 });
 
 export default router;
