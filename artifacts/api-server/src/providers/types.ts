@@ -2,8 +2,8 @@
  * Node Provider Interface
  *
  * This abstraction layer decouples the control panel from the
- * underlying daemon implementation. Swap out MockProvider for a
- * real WingsProvider (or custom agent) without touching route code.
+ * underlying node runtime implementation. Swap out the mock provider
+ * for a real provider without touching route code.
  */
 
 export type PowerAction = "start" | "stop" | "restart" | "kill";
@@ -54,67 +54,37 @@ export interface NodeHeartbeatResult {
 }
 
 /**
- * INodeProvider — all interactions with a game server daemon.
+ * INodeProvider — all interactions with a game server node runtime.
  * Every method is async and may throw ProviderError on failure.
  */
 export interface INodeProvider {
   readonly name: string;
 
-  /** Check if node is reachable and get resource usage */
   heartbeat(node: ProviderNode): Promise<NodeHeartbeatResult>;
-
-  /** Start, stop, restart, or kill a server process */
   powerAction(server: ProviderServer, action: PowerAction): Promise<void>;
-
-  /** Send a command to the server console */
   sendCommand(server: ProviderServer, command: string): Promise<void>;
-
-  /** Get current resource usage stats */
   getStats(server: ProviderServer): Promise<ServerStats>;
-
-  /** List files at a given path */
   listFiles(server: ProviderServer, path: string): Promise<FileEntry[]>;
-
-  /** Read a file's content */
   readFile(server: ProviderServer, path: string): Promise<string>;
-
-  /** Write a file's content */
   writeFile(server: ProviderServer, path: string, content: string): Promise<void>;
-
-  /** Delete one or more files/directories */
   deleteFiles(server: ProviderServer, paths: string[]): Promise<void>;
-
-  /** Rename / move a file */
   renameFile(server: ProviderServer, from: string, to: string): Promise<void>;
-
-  /** Create a directory */
   createDirectory(server: ProviderServer, path: string): Promise<void>;
-
-  /** Trigger a backup creation */
   createBackup(server: ProviderServer, name: string): Promise<{ uuid: string }>;
-
-  /** Delete a backup */
   deleteBackup(server: ProviderServer, backupUuid: string): Promise<void>;
-
-  /** Initiate a backup restore */
   restoreBackup(server: ProviderServer, backupUuid: string): Promise<void>;
 
   /**
-   * Provision a brand-new server on the daemon.
-   * Sends the full Wings-compatible configuration (image, startup, resources,
-   * allocation, env vars) and then triggers the install sequence.
-   * Called once, immediately after the panel's DB insert.
+   * Provision a brand-new server on the target runtime.
+   * Sends the full server configuration (image, startup, resources,
+   * allocation, environment variables) and then triggers the install sequence.
    */
   provisionServer(server: ProviderServer): Promise<void>;
 
-  /** Trigger a reinstall sequence on an already-provisioned server */
   installServer(server: ProviderServer): Promise<void>;
-
-  /** Remove a server from the daemon, deleting its containers and volumes */
   deleteServer(server: ProviderServer): Promise<void>;
 }
 
-/** Minimal node info passed to the provider */
 export interface ProviderNode {
   id: number;
   fqdn: string;
@@ -123,7 +93,6 @@ export interface ProviderNode {
   daemonToken: string | null;
 }
 
-/** Minimal server info passed to the provider */
 export interface ProviderServer {
   id: number;
   uuid: string;
@@ -133,16 +102,8 @@ export interface ProviderServer {
   memoryLimit: number;
   diskLimit: number;
   cpuLimit: number;
-  /**
-   * Primary allocation details — required for provisionServer().
-   * Optional elsewhere (power actions, file ops, etc. don't need it).
-   */
   allocationIp?: string;
   allocationPort?: number;
-  /**
-   * Environment variable values (envVar → value) — required for provisionServer().
-   * Optional elsewhere.
-   */
   environment?: Record<string, string>;
 }
 
