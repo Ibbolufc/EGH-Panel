@@ -4,7 +4,7 @@ import http from "http";
 
 const router: Router = Router();
 
-export const PINNED_VERSION = "v0.1.0";
+export const PINNED_VERSION = "v0.1.1";
 export const PINNED_ASSET = "egh-node-linux-amd64";
 
 const ALLOWED_REDIRECT_HOSTS = [
