@@ -53,10 +53,22 @@ router.get("/nodes", requireAdmin, async (req, res): Promise<void> => {
 
   const results = await Promise.all(
     nodes.map(async (node) => {
-      const [serverCount] = await db.select({ count: count() }).from(serversTable).where(eq(serversTable.nodeId, node.id));
-      const [allocCount] = await db.select({ count: count() }).from(allocationsTable).where(eq(allocationsTable.nodeId, node.id));
-      return nodeWithMeta(node, Number(serverCount?.count ?? 0), Number(allocCount?.count ?? 0));
-    })
+      const [serverCount] = await db
+        .select({ count: count() })
+        .from(serversTable)
+        .where(eq(serversTable.nodeId, node.id));
+
+      const [allocCount] = await db
+        .select({ count: count() })
+        .from(allocationsTable)
+        .where(eq(allocationsTable.nodeId, node.id));
+
+      return nodeWithMeta(
+        node,
+        Number(serverCount?.count ?? 0),
+        Number(allocCount?.count ?? 0),
+      );
+    }),
   );
 
   res.json(results);
@@ -69,7 +81,6 @@ router.post("/nodes", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  // Accept extra fields not in generated zod schema
   const extra: Record<string, any> = {};
   if (req.body.location) extra.location = String(req.body.location);
   if (req.body.notes) extra.notes = String(req.body.notes);
@@ -113,7 +124,10 @@ router.get("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
     .from(allocationsTable)
     .where(eq(allocationsTable.nodeId, id));
 
-  const [serverCount] = await db.select({ count: count() }).from(serversTable).where(eq(serversTable.nodeId, id));
+  const [serverCount] = await db
+    .select({ count: count() })
+    .from(serversTable)
+    .where(eq(serversTable.nodeId, id));
 
   res.json({
     ...node,
@@ -133,19 +147,37 @@ router.patch("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
 
-  // Partial update — accept name, location, notes, fqdn, daemonPort, scheme, etc.
-  const allowedFields = ["name", "fqdn", "scheme", "daemonPort", "isPublic", "memoryTotal",
-    "memoryOverallocate", "diskTotal", "diskOverallocate", "status", "location", "notes"];
+  const allowedFields = [
+    "name",
+    "fqdn",
+    "scheme",
+    "daemonPort",
+    "isPublic",
+    "memoryTotal",
+    "memoryOverallocate",
+    "diskTotal",
+    "diskOverallocate",
+    "status",
+    "location",
+    "notes",
+  ];
+
   const patch: Record<string, any> = {};
   for (const key of allowedFields) {
     if (key in req.body) patch[key] = req.body[key];
   }
 
-  const [node] = await db.update(nodesTable).set(patch).where(eq(nodesTable.id, id)).returning();
+  const [node] = await db
+    .update(nodesTable)
+    .set(patch)
+    .where(eq(nodesTable.id, id))
+    .returning();
+
   if (!node) {
     res.status(404).json({ error: "Node not found" });
     return;
   }
+
   res.json(nodeWithMeta(node));
 });
 
@@ -159,49 +191,73 @@ router.get("/nodes/:id/install.sh", installScriptLimiter, async (req, res): Prom
   const token = typeof req.query.token === "string" ? req.query.token : "";
 
   if (!token) {
-    res.status(401).setHeader("Content-Type", "text/x-shellscript").send(
-      "#!/usr/bin/env bash\n# Error: missing ?token query parameter\necho 'Error: missing token' >&2\nexit 1\n"
-    );
+    res
+      .status(401)
+      .setHeader("Content-Type", "text/x-shellscript")
+      .send(
+        "#!/usr/bin/env bash\n# Error: missing ?token query parameter\necho 'Error: missing token' >&2\nexit 1\n",
+      );
     return;
   }
 
   const [node] = await db.select().from(nodesTable).where(eq(nodesTable.id, id));
 
   if (!node) {
-    res.status(404).setHeader("Content-Type", "text/x-shellscript").send(
-      "#!/usr/bin/env bash\n# Error: node not found\necho 'Error: node not found' >&2\nexit 1\n"
-    );
+    res
+      .status(404)
+      .setHeader("Content-Type", "text/x-shellscript")
+      .send(
+        "#!/usr/bin/env bash\n# Error: node not found\necho 'Error: node not found' >&2\nexit 1\n",
+      );
     return;
   }
 
   if (!node.registrationToken || node.registrationToken !== token) {
-    res.status(403).setHeader("Content-Type", "text/x-shellscript").send(
-      "#!/usr/bin/env bash\n# Error: invalid token\necho 'Error: invalid token — regenerate it from the EGH Panel' >&2\nexit 1\n"
-    );
+    res
+      .status(403)
+      .setHeader("Content-Type", "text/x-shellscript")
+      .send(
+        "#!/usr/bin/env bash\n# Error: invalid token\necho 'Error: invalid token — regenerate it from the EGH Panel' >&2\nexit 1\n",
+      );
     return;
   }
 
-  // Reject tokens that have passed their 48-hour expiry window.
   if (node.registrationTokenExpiresAt && node.registrationTokenExpiresAt < new Date()) {
-    res.status(403).setHeader("Content-Type", "text/x-shellscript").send(
-      "#!/usr/bin/env bash\n# Error: token expired\necho 'Error: install token has expired — regenerate it from the EGH Panel' >&2\nexit 1\n"
-    );
+    res
+      .status(403)
+      .setHeader("Content-Type", "text/x-shellscript")
+      .send(
+        "#!/usr/bin/env bash\n# Error: token expired\necho 'Error: install token has expired — regenerate it from the EGH Panel' >&2\nexit 1\n",
+      );
     return;
   }
 
-  // Prefer explicit public URL from .env so generated scripts include the right
+  // Prefer explicit public URL from environment so generated scripts include the right
   // scheme, domain, and port (for example :81). Fall back to forwarded/request headers.
-  const configuredPanelUrl = (process.env["FRONTEND_URL"] || "").trim().replace(/\/+$/, "");
+  const configuredPanelUrl = (
+    process.env["FRONTEND_URL"] ||
+    process.env["CORS_ORIGIN"] ||
+    ""
+  )
+    .trim()
+    .replace(/\/+$/, "");
+
   const forwardedProto = (req.get("x-forwarded-proto") || req.protocol || "http")
     .split(",")[0]
     .trim();
+
   const forwardedHost = (req.get("x-forwarded-host") || req.get("host") || "")
     .split(",")[0]
     .trim();
 
   const panelUrl = configuredPanelUrl || `${forwardedProto}://${forwardedHost}`;
 
-  const { name: nodeName, fqdn: nodeFqdn, daemonPort, registrationToken } = node;
+  const {
+    name: nodeName,
+    fqdn: nodeFqdn,
+    daemonPort,
+    registrationToken,
+  } = node;
 
   const script = `#!/usr/bin/env bash
 # ============================================================
@@ -308,7 +364,6 @@ echo "============================================================"
     .send(script);
 });
 
-// Regenerate registration token — invalidates any pending install command
 router.post("/nodes/:id/regen-token", requireAdmin, regenTokenLimiter, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
@@ -318,7 +373,11 @@ router.post("/nodes/:id/regen-token", requireAdmin, regenTokenLimiter, async (re
 
   const [node] = await db
     .update(nodesTable)
-    .set({ registrationToken: newToken, registrationTokenExpiresAt: expiresAt, status: "pending" })
+    .set({
+      registrationToken: newToken,
+      registrationTokenExpiresAt: expiresAt,
+      status: "pending",
+    })
     .where(eq(nodesTable.id, id))
     .returning();
 
@@ -327,10 +386,13 @@ router.post("/nodes/:id/regen-token", requireAdmin, regenTokenLimiter, async (re
     return;
   }
 
-  res.json({ registrationToken: newToken, registrationTokenExpiresAt: expiresAt, status: node.status });
+  res.json({
+    registrationToken: newToken,
+    registrationTokenExpiresAt: expiresAt,
+    status: node.status,
+  });
 });
 
-// Test connection — admin triggers a live reachability check against the daemon
 router.post("/nodes/:id/test-connection", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
@@ -369,7 +431,6 @@ router.post("/nodes/:id/test-connection", requireAdmin, async (req, res): Promis
     return;
   }
 
-  // Daemon is reachable — optimistically mark it online
   const now = new Date();
   await db
     .update(nodesTable)
@@ -387,11 +448,6 @@ router.post("/nodes/:id/test-connection", requireAdmin, async (req, res): Promis
   });
 });
 
-// Heartbeat — called by the EGH Node agent; no admin session required
-// Auth: Bearer <registrationToken | daemonToken> in Authorization header
-// On the first heartbeat (registrationToken, no daemonToken yet) a long-lived
-// daemonToken is generated, stored, and returned so the agent can switch to it
-// for all future heartbeats. Both tokens are accepted for backwards compat.
 router.post("/nodes/:id/heartbeat", async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
@@ -420,22 +476,29 @@ router.post("/nodes/:id/heartbeat", async (req, res): Promise<void> => {
 
   const now = new Date();
 
-  // First heartbeat: generate a long-lived daemonToken and return it so the
-  // agent can switch away from the one-time registrationToken.
-  // The WHERE daemon_token IS NULL guard makes this atomic — concurrent
-  // first heartbeats only produce one winner; others read the stored token.
   if (!node.daemonToken) {
     const candidate = "daemon_" + randomBytes(32).toString("hex");
     const [updated] = await db
       .update(nodesTable)
-      .set({ status: "online", daemonToken: candidate, lastHeartbeatAt: now, updatedAt: now })
+      .set({
+        status: "online",
+        daemonToken: candidate,
+        lastHeartbeatAt: now,
+        updatedAt: now,
+      })
       .where(and(eq(nodesTable.id, id), isNull(nodesTable.daemonToken)))
       .returning({ daemonToken: nodesTable.daemonToken });
 
-    const daemonToken = updated?.daemonToken ?? (
-      await db.select({ daemonToken: nodesTable.daemonToken })
-        .from(nodesTable).where(eq(nodesTable.id, id)).limit(1)
-    )[0]?.daemonToken ?? candidate;
+    const daemonToken =
+      updated?.daemonToken ??
+      (
+        await db
+          .select({ daemonToken: nodesTable.daemonToken })
+          .from(nodesTable)
+          .where(eq(nodesTable.id, id))
+          .limit(1)
+      )[0]?.daemonToken ??
+      candidate;
 
     res.json({ ok: true, status: "online", daemonToken });
     return;
@@ -463,31 +526,47 @@ router.delete("/nodes/:id", requireAdmin, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Node not found" });
     return;
   }
+
   res.sendStatus(204);
 });
 
-// Allocations
 router.get("/nodes/:nodeId/allocations", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.nodeId) ? req.params.nodeId[0] : req.params.nodeId;
   const nodeId = parseInt(rawId, 10);
 
-  const allocations = await db.select().from(allocationsTable).where(eq(allocationsTable.nodeId, nodeId));
-  res.json(allocations.map((a) => ({ ...a, isAssigned: a.serverId != null, serverName: null })));
+  const allocations = await db
+    .select()
+    .from(allocationsTable)
+    .where(eq(allocationsTable.nodeId, nodeId));
+
+  res.json(
+    allocations.map((a) => ({
+      ...a,
+      isAssigned: a.serverId != null,
+      serverName: null,
+    })),
+  );
 });
 
 router.post("/nodes/:nodeId/allocations", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.nodeId) ? req.params.nodeId[0] : req.params.nodeId;
   const nodeId = parseInt(rawId, 10);
 
-  const { ip, ports, alias } = req.body as { ip: string; ports: number[]; alias?: string };
+  const { ip, ports, alias } = req.body as {
+    ip: string;
+    ports: number[];
+    alias?: string;
+  };
+
   if (!ip || !Array.isArray(ports) || ports.length === 0) {
     res.status(400).json({ error: "ip and ports are required" });
     return;
   }
 
-  const inserted = await db.insert(allocationsTable).values(
-    ports.map((port) => ({ nodeId, ip, port, alias: alias ?? null }))
-  ).returning();
+  const inserted = await db
+    .insert(allocationsTable)
+    .values(ports.map((port) => ({ nodeId, ip, port, alias: alias ?? null })))
+    .returning();
 
   const first = inserted[0];
   res.status(201).json({ ...first, isAssigned: false, serverName: null });
@@ -502,6 +581,7 @@ router.delete("/allocations/:id", requireAdmin, async (req, res): Promise<void> 
     res.status(404).json({ error: "Allocation not found" });
     return;
   }
+
   res.sendStatus(204);
 });
 
