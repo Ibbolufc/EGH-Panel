@@ -6,17 +6,22 @@ const router: Router = Router();
 
 /**
  * Pinned EGH Node (Wings) binary version.
- * Changing this constant and redeploying is the only way to update the
- * binary version served to nodes — runtime/DB overrides are intentionally
- * not supported so that upgrades require a deliberate code change.
+ * Change this constant and redeploy to update the binary version served to nodes.
  */
 export const PINNED_VERSION = "v1.11.13";
 
+/**
+ * GitHub release downloads may redirect through a few different asset hosts.
+ * We allow only known GitHub-owned hosts here.
+ */
 const ALLOWED_REDIRECT_HOSTS = [
   "github.com",
+  "githubusercontent.com",
   "objects.githubusercontent.com",
   "codeload.github.com",
   "releases.githubusercontent.com",
+  "release-assets.githubusercontent.com",
+  "objects-origin.githubusercontent.com",
 ];
 
 const DOWNLOAD_TIMEOUT_MS = 30_000;
@@ -29,17 +34,25 @@ function isAllowedHost(url: string): boolean {
   try {
     const { hostname } = new URL(url);
     return ALLOWED_REDIRECT_HOSTS.some(
-      (allowed) => hostname === allowed || hostname.endsWith("." + allowed)
+      (allowed) => hostname === allowed || hostname.endsWith(`.${allowed}`),
     );
   } catch {
     return false;
   }
 }
 
+function resolveRedirect(currentUrl: string, location: string): string {
+  try {
+    return new URL(location, currentUrl).toString();
+  } catch {
+    return location;
+  }
+}
+
 function fetchWithRedirects(
   url: string,
   res: import("express").Response,
-  redirectCount = 0
+  redirectCount = 0,
 ): void {
   if (redirectCount > 10) {
     res.status(502).json({ error: "Too many redirects fetching binary" });
@@ -47,44 +60,46 @@ function fetchWithRedirects(
   }
 
   if (!isAllowedHost(url)) {
-    res.status(502).json({ error: "Redirect target is not an allowed host" });
+    res.status(502).json({ error: "Redirect target is not an allowed host", url });
     return;
   }
 
   const lib = url.startsWith("https://") ? https : http;
 
-  const req = lib.get(url, (upstream) => {
-    const { statusCode, headers } = upstream;
+  const req = lib.get(
+    url,
+    {
+      headers: {
+        "User-Agent": "EGH-Panel/1.0",
+        Accept: "application/octet-stream,*/*",
+      },
+    },
+    (upstream) => {
+      const { statusCode, headers } = upstream;
 
-    if (
-      statusCode &&
-      statusCode >= 300 &&
-      statusCode < 400 &&
-      headers.location
-    ) {
-      upstream.resume();
-      fetchWithRedirects(headers.location, res, redirectCount + 1);
-      return;
-    }
+      if (statusCode && statusCode >= 300 && statusCode < 400 && headers.location) {
+        upstream.resume();
+        const nextUrl = resolveRedirect(url, headers.location);
+        fetchWithRedirects(nextUrl, res, redirectCount + 1);
+        return;
+      }
 
-    if (!statusCode || statusCode < 200 || statusCode >= 300) {
-      upstream.resume();
-      res.status(502).json({ error: `Upstream returned ${statusCode}` });
-      return;
-    }
+      if (!statusCode || statusCode < 200 || statusCode >= 300) {
+        upstream.resume();
+        res.status(502).json({ error: `Upstream returned ${statusCode}` });
+        return;
+      }
 
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="egh-node"'
-    );
-    res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("Content-Disposition", 'attachment; filename="egh-node"');
+      res.setHeader("Content-Type", "application/octet-stream");
 
-    if (headers["content-length"]) {
-      res.setHeader("Content-Length", headers["content-length"]);
-    }
+      if (headers["content-length"]) {
+        res.setHeader("Content-Length", headers["content-length"]);
+      }
 
-    upstream.pipe(res);
-  });
+      upstream.pipe(res);
+    },
+  );
 
   req.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
     req.destroy();
@@ -95,7 +110,7 @@ function fetchWithRedirects(
 
   req.on("error", (err) => {
     if (!res.headersSent) {
-      res.status(502).json({ error: "Failed to fetch binary: " + err.message });
+      res.status(502).json({ error: `Failed to fetch binary: ${err.message}` });
     }
   });
 }
