@@ -17,11 +17,12 @@ export default function AdminEggs() {
   const [showImport, setShowImport] = useState(false);
   const [showCreateNest, setShowCreateNest] = useState(false);
   const [expandedNests, setExpandedNests] = useState<Set<number>>(new Set());
-  const { data: nestsData, isLoading: nestsLoading, refetch: refetchNests } = useListNests({ page: 1, limit: 100 });
-  const { data: eggsData, isLoading: eggsLoading, refetch: refetchEggs } = useListEggs({ page: 1, limit: 100 });
 
-  const nests = nestsData?.data ?? [];
-  const eggs = eggsData?.data ?? [];
+  const { data: nestsData, isLoading: nestsLoading, refetch: refetchNests } = useListNests();
+  const { data: eggsData, isLoading: eggsLoading, refetch: refetchEggs } = useListEggs();
+
+  const nests = Array.isArray(nestsData) ? nestsData : [];
+  const eggs = Array.isArray(eggsData) ? eggsData : [];
   const totalEggs = eggs.length;
 
   function eggsForNest(nestId: number) {
@@ -46,7 +47,6 @@ export default function AdminEggs() {
   return (
     <AdminLayout title="Eggs & Nests">
       <div className="space-y-5">
-        {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground">Eggs &amp; Nests</h2>
@@ -81,7 +81,6 @@ export default function AdminEggs() {
           </div>
         </div>
 
-        {/* Nests accordion */}
         <div className="space-y-2">
           {nestsLoading ? (
             Array.from({ length: 3 }).map((_, i) => (
@@ -216,13 +215,20 @@ export default function AdminEggs() {
           <ImportEggModal
             nests={nests}
             onClose={() => setShowImport(false)}
-            onSuccess={() => { setShowImport(false); refetchEggs(); }}
+            onSuccess={() => {
+              setShowImport(false);
+              refetchEggs();
+              refetchNests();
+            }}
           />
         )}
         {showCreateNest && (
           <CreateNestModal
             onClose={() => setShowCreateNest(false)}
-            onSuccess={() => { setShowCreateNest(false); refetchNests(); }}
+            onSuccess={() => {
+              setShowCreateNest(false);
+              refetchNests();
+            }}
           />
         )}
       </div>
