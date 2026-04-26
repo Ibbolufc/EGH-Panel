@@ -189,11 +189,19 @@ router.get("/nodes/:id/install.sh", installScriptLimiter, async (req, res): Prom
     return;
   }
 
-  // Reconstruct the panel URL from the incoming request.
-  // app.set("trust proxy", 1) ensures req.protocol reflects X-Forwarded-Proto.
-  const panelUrl = `${req.protocol}://${req.get("host")}`;
+  // Prefer explicit public URL from .env so generated scripts include the right
+  // scheme, domain, and port (for example :81). Fall back to forwarded/request headers.
+  const configuredPanelUrl = (process.env["FRONTEND_URL"] || "").trim().replace(/\/+$/, "");
+  const forwardedProto = (req.get("x-forwarded-proto") || req.protocol || "http")
+    .split(",")[0]
+    .trim();
+  const forwardedHost = (req.get("x-forwarded-host") || req.get("host") || "")
+    .split(",")[0]
+    .trim();
 
-  const { name: nodeName, fqdn: nodeFqdn, daemonPort, scheme, registrationToken } = node;
+  const panelUrl = configuredPanelUrl || `${forwardedProto}://${forwardedHost}`;
+
+  const { name: nodeName, fqdn: nodeFqdn, daemonPort, registrationToken } = node;
 
   const script = `#!/usr/bin/env bash
 # ============================================================
@@ -383,7 +391,7 @@ router.post("/nodes/:id/test-connection", requireAdmin, async (req, res): Promis
 // Auth: Bearer <registrationToken | daemonToken> in Authorization header
 // On the first heartbeat (registrationToken, no daemonToken yet) a long-lived
 // daemonToken is generated, stored, and returned so the agent can switch to it
-// for all future heartbeats.  Both tokens are accepted for backwards compat.
+// for all future heartbeats. Both tokens are accepted for backwards compat.
 router.post("/nodes/:id/heartbeat", async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
@@ -424,7 +432,6 @@ router.post("/nodes/:id/heartbeat", async (req, res): Promise<void> => {
       .where(and(eq(nodesTable.id, id), isNull(nodesTable.daemonToken)))
       .returning({ daemonToken: nodesTable.daemonToken });
 
-    // Use the stored token — either ours (won the race) or the concurrent winner's.
     const daemonToken = updated?.daemonToken ?? (
       await db.select({ daemonToken: nodesTable.daemonToken })
         .from(nodesTable).where(eq(nodesTable.id, id)).limit(1)
@@ -434,16 +441,12 @@ router.post("/nodes/:id/heartbeat", async (req, res): Promise<void> => {
     return;
   }
 
-  // Subsequent heartbeats: just update the timestamp/status.
-  // If the agent is still using the registrationToken, include the daemonToken
-  // in the response again so it can make the switch.
   await db
     .update(nodesTable)
     .set({ status: "online", lastHeartbeatAt: now, updatedAt: now })
     .where(eq(nodesTable.id, id));
 
   if (matchesRegistration) {
-    // Remind the agent to switch to the daemonToken
     res.json({ ok: true, status: "online", daemonToken: node.daemonToken });
     return;
   }
