@@ -1,11 +1,11 @@
 /**
  * MockProvider
  *
- * A fully structured mock of INodeProvider.
+ * Structured mock implementation of INodeProvider.
  * All operations succeed in-memory with realistic simulated responses.
  *
- * Replace with WingsProvider (or a custom agent) by registering
- * a different provider in registry.ts — no route code changes needed.
+ * This exists as a development/testing fallback provider. The live node
+ * install flow now uses the custom EGH Node daemon.
  */
 
 import type {
@@ -199,23 +199,18 @@ export class MockProvider implements INodeProvider {
     return { uuid: randomUUID() };
   }
 
-  async deleteBackup(_server: ProviderServer, _backupUuid: string): Promise<void> {
-  }
+  async deleteBackup(_server: ProviderServer, _backupUuid: string): Promise<void> {}
 
-  async restoreBackup(_server: ProviderServer, _backupUuid: string): Promise<void> {
-  }
+  async restoreBackup(_server: ProviderServer, _backupUuid: string): Promise<void> {}
 
-  async provisionServer(_server: ProviderServer): Promise<void> {
-  }
+  async provisionServer(_server: ProviderServer): Promise<void> {}
 
-  async installServer(_server: ProviderServer): Promise<void> {
-  }
+  async installServer(_server: ProviderServer): Promise<void> {}
 
   async deleteServer(server: ProviderServer): Promise<void> {
     fileStore.delete(String(server.id));
   }
 
-  /** Return recent console lines for this server (used by WebSocket handler) */
   getRecentLogs(serverId: number): string[] {
     return consoleLogs[serverId] ?? [];
   }
