@@ -28,8 +28,10 @@ export COMPOSE_DOCKER_CLI_BUILD="${COMPOSE_DOCKER_CLI_BUILD:-0}"
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
 
 log "Checking working tree"
-if [ -n "$(git status --porcelain)" ]; then
-  die "You have uncommitted changes in ~/EGH-Panel. Commit or stash them first."
+DIRTY_FILES="$(git status --porcelain --untracked-files=all | grep -vE '^\?\? \.env$' || true)"
+if [ -n "$DIRTY_FILES" ]; then
+  echo "$DIRTY_FILES"
+  die "You have uncommitted tracked changes or unexpected untracked files in ~/EGH-Panel. Commit or stash them first."
 fi
 
 log "Fetching latest code"
