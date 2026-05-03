@@ -43,11 +43,11 @@ git reset --hard "origin/$CURRENT_BRANCH"
 log "Ensuring database services are up"
 docker compose up -d postgres redis
 
-log "Rebuilding API and frontend images"
-docker compose build --no-cache api frontend nginx
+log "Rebuilding API, frontend, nginx, and tools images"
+docker compose build --no-cache api frontend nginx tools
 
 log "Running database schema sync"
-if docker compose run --rm api pnpm --filter @workspace/db run push-force; then
+if docker compose --profile tools run --rm tools pnpm --filter @workspace/db run push-force; then
   echo "[update] Database schema sync completed."
 else
   die "Database schema sync failed."
