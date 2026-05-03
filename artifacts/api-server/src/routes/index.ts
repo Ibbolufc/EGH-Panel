@@ -14,6 +14,7 @@ import activityRouter from "./activity";
 import dashboardRouter from "./dashboard";
 import downloadRouter from "./download";
 import settingsRouter from "./settings";
+import remoteRouter from "./remote";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(activityRouter);
 router.use(dashboardRouter);
 router.use(downloadRouter);
 router.use(settingsRouter);
+router.use(remoteRouter);
 
 export default router;
