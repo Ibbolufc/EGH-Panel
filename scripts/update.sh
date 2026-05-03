@@ -28,17 +28,17 @@ export COMPOSE_DOCKER_CLI_BUILD="${COMPOSE_DOCKER_CLI_BUILD:-0}"
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
 
 log "Checking working tree"
-DIRTY_FILES="$(git status --porcelain --untracked-files=all | grep -vE '^\?\? \.env$' || true)"
+DIRTY_FILES="$(git status --porcelain --untracked-files=all | grep -vE '^\?\? \.env$|^\?\? \.env\..*$' || true)"
 if [ -n "$DIRTY_FILES" ]; then
   echo "$DIRTY_FILES"
-  die "You have uncommitted tracked changes or unexpected untracked files in ~/EGH-Panel. Commit or stash them first."
+  die "You have tracked changes or unexpected untracked files in ~/EGH-Panel. This server should deploy from GitHub cleanly. Commit, stash, or remove those changes first."
 fi
 
 log "Fetching latest code"
 git fetch origin "$CURRENT_BRANCH"
 
-log "Pulling latest code"
-git pull --ff-only origin "$CURRENT_BRANCH"
+log "Resetting working tree to origin/$CURRENT_BRANCH"
+git reset --hard "origin/$CURRENT_BRANCH"
 
 log "Ensuring database services are up"
 docker compose up -d postgres redis
