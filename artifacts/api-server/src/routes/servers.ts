@@ -94,14 +94,21 @@ router.post("/servers", requireAdmin, validateBody(CreateServerBody), asyncHandl
   });
 
   // Best-effort: send full server config to the daemon and trigger install.
-  // Wings install is async — status stays "installing" until the daemon
-  // signals completion.  Non-fatal if node is offline; admin can retry later.
+  // For a real Wings daemon the install is async — status stays "installing"
+  // until Wings POSTs back to /api/remote/servers/:uuid/install.
+  // For the mock provider (no daemon) the provision is synchronous, so we
+  // advance status to "offline" immediately so the server becomes usable.
+  // Non-fatal if the node is offline; admin can retry via reinstall later.
   try {
     const { providerServer } = await buildProviderServer(server.id);
-    await getProviderForNode(providerServer.node).provisionServer(providerServer);
+    const provider = getProviderForNode(providerServer.node);
+    await provider.provisionServer(providerServer);
+    if (provider.name === "mock") {
+      await db.update(serversTable).set({ status: "offline" }).where(eq(serversTable.id, server.id));
+    }
   } catch (err) {
     // Daemon unreachable or node not configured yet — server stays "installing"
-    console.warn(`[servers] Daemon provisioning failed for server ${server.id}: ${err instanceof Error ? err.message : String(err)}`);
+    req.log.warn({ serverId: server.id, err }, "[servers] Daemon provisioning failed");
   }
 
   res.status(201).json(await formatServer(server));
