@@ -32,15 +32,18 @@ export async function buildProviderServer(serverId: number): Promise<{
   const [node] = await db.select().from(nodesTable).where(eq(nodesTable.id, server.nodeId));
   if (!node) throw new ProviderError("Node not found", "NOT_FOUND", 404);
 
-  // daemonToken is the explicit per-node secret set after Wings connects;
-  // fall back to registrationToken (same value Wings stores as `token:` in
-  // its config.yml) so JWT auth works for any node that has completed install.
+  // daemonToken is set only after Wings successfully completes its first
+  // heartbeat with the panel (nodes.ts generates and stores it at that point).
+  // registrationToken is Wings→Panel auth only — do NOT fall back to it here,
+  // because registry.ts uses daemonToken's presence to decide WingsProvider vs
+  // MockProvider.  A null daemonToken means Wings hasn't connected yet, so the
+  // mock provider should be used and the server status advanced immediately.
   const providerNode: ProviderNode = {
     id: node.id,
     fqdn: node.fqdn,
     scheme: node.scheme,
     daemonPort: node.daemonPort,
-    daemonToken: node.daemonToken ?? node.registrationToken,
+    daemonToken: node.daemonToken,
   };
 
   const [allocation] = await db
