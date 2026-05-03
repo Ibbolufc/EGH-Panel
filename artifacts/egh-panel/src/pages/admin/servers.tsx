@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AdminLayout } from "@/components/layout/admin-layout";
-import { useListServers, useListNodes, useListEggs, useListUsers, useCreateServer, useDeleteServer } from "@workspace/api-client-react";
+import { useListServers, useListNodes, useListEggs, useListUsers, useListAllocations, useCreateServer, useDeleteServer } from "@workspace/api-client-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Plus, Search, Server, Trash2, MemoryStick, HardDrive, Loader2 } from "lucide-react";
 import { Link } from "wouter";
@@ -238,6 +238,10 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   const { data: nodes } = useListNodes();
   const { data: eggs } = useListEggs();
   const { data: users } = useListUsers();
+  const { data: allocations } = useListAllocations(form.nodeId, {
+    query: { enabled: form.nodeId > 0 },
+  });
+  const freeAllocations = (allocations ?? []).filter((a: any) => !a.isAssigned);
   const { toast } = useToast();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -246,8 +250,12 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
       await createServer.mutateAsync({ data: form });
       toast({ title: "Server created", description: `"${form.name}" is being set up.` });
       onSuccess();
-    } catch {
-      toast({ title: "Failed to create server", variant: "destructive" });
+    } catch (err) {
+      toast({
+        title: "Failed to create server",
+        description: err instanceof Error ? err.message : "An unexpected error occurred.",
+        variant: "destructive",
+      });
     }
   }
 
@@ -289,12 +297,24 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             </div>
             <div>
               <label className={labelClass}>Node</label>
-              <select value={form.nodeId} onChange={(e) => setForm({ ...form, nodeId: Number(e.target.value) })}
+              <select
+                value={form.nodeId}
+                onChange={(e) => setForm({ ...form, nodeId: Number(e.target.value), allocationId: 0 })}
                 className={inputClass} required>
                 <option value={0}>Select node…</option>
                 {(nodes ?? []).map((n: any) => <option key={n.id} value={n.id}>{n.name}</option>)}
               </select>
             </div>
+          </div>
+          <div>
+            <label className={labelClass}>Allocation (Port)</label>
+            <select value={form.allocationId} onChange={(e) => setForm({ ...form, allocationId: Number(e.target.value) })}
+              className={inputClass} required disabled={form.nodeId === 0}>
+              <option value={0}>{form.nodeId === 0 ? "Select a node first…" : freeAllocations.length === 0 ? "No free allocations on this node" : "Select port…"}</option>
+              {freeAllocations.map((a: any) => (
+                <option key={a.id} value={a.id}>{a.alias ? `${a.alias} (${a.ip}:${a.port})` : `${a.ip}:${a.port}`}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={labelClass}>Egg (Game Template)</label>
