@@ -292,7 +292,7 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
               <select value={form.nodeId} onChange={(e) => setForm({ ...form, nodeId: Number(e.target.value) })}
                 className={inputClass} required>
                 <option value={0}>Select node…</option>
-                {(nodes?.data ?? []).map((n: any) => <option key={n.id} value={n.id}>{n.name}</option>)}
+                {(nodes ?? []).map((n: any) => <option key={n.id} value={n.id}>{n.name}</option>)}
               </select>
             </div>
           </div>
@@ -301,7 +301,7 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             <select value={form.eggId} onChange={(e) => setForm({ ...form, eggId: Number(e.target.value) })}
               className={inputClass} required>
               <option value={0}>Select egg…</option>
-              {(eggs?.data ?? []).map((eg: any) => <option key={eg.id} value={eg.id}>{eg.name}</option>)}
+              {(eggs ?? []).map((eg: any) => <option key={eg.id} value={eg.id}>{eg.name}</option>)}
             </select>
           </div>
           <div>
