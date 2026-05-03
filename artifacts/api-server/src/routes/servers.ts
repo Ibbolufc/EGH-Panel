@@ -111,7 +111,10 @@ router.post("/servers", requireAdmin, validateBody(CreateServerBody), asyncHandl
     req.log.warn({ serverId: server.id, err }, "[servers] Daemon provisioning failed");
   }
 
-  res.status(201).json(await formatServer(server));
+  // Re-fetch the server so the response reflects any status change made
+  // by the provision block above (e.g. mock provider sets it to "offline").
+  const [fresh] = await db.select().from(serversTable).where(eq(serversTable.id, server.id));
+  res.status(201).json(await formatServer(fresh ?? server));
 }));
 
 router.get("/servers/:id", requireAuth, asyncHandler(async (req, res) => {
