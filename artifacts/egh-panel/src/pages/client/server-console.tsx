@@ -83,16 +83,32 @@ export default function ServerConsole() {
   const logEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fallbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
   const terminalErrorRef = useRef(false);
-  const failureCountRef = useRef(0);
 
   const appendLog = useCallback((line: string) => {
     setLogs((prev) => {
+      if (prev.includes(line) && (line.includes("HTTP fallback") || line.includes("Stats polling unavailable"))) {
+        return prev;
+      }
       const next = [...prev, line];
       return next.length > 500 ? next.slice(-500) : next;
     });
   }, []);
+
+  const enableHttpFallback = useCallback(() => {
+    setHttpFallback((prev) => {
+      if (!prev) {
+        appendLog("[Panel] Live console websocket unavailable. Switched to HTTP fallback mode.");
+      }
+      return true;
+    });
+    setWsStatus("error");
+    if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
+    wsRef.current?.close();
+  }, [appendLog]);
 
   const fetchStats = useCallback(async () => {
     const token = localStorage.getItem("egh_token");
@@ -122,9 +138,16 @@ export default function ServerConsole() {
     const ws = new WebSocket(buildWsUrl(id, token));
     wsRef.current = ws;
 
+    if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
+    fallbackTimer.current = setTimeout(() => {
+      if (!unmountedRef.current && ws.readyState !== WebSocket.OPEN) {
+        enableHttpFallback();
+      }
+    }, 2500);
+
     ws.onopen = () => {
       if (unmountedRef.current) { ws.close(); return; }
-      failureCountRef.current = 0;
+      if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
       setWsStatus("connected");
       appendLog("[Panel] Live console connected.");
     };
@@ -146,9 +169,8 @@ export default function ServerConsole() {
           case "auth_error":
           case "not_found":
             terminalErrorRef.current = true;
-            setWsStatus("error");
             appendLog(`[Panel] Console error: ${String(msg.data)}`);
-            ws.close();
+            enableHttpFallback();
             break;
         }
       } catch {
@@ -157,23 +179,15 @@ export default function ServerConsole() {
     };
 
     ws.onclose = () => {
-      if (unmountedRef.current) return;
-      setWsStatus("disconnected");
-      failureCountRef.current += 1;
-      if (failureCountRef.current >= 3) {
-        setHttpFallback(true);
-        appendLog("[Panel] Live console websocket unavailable. Switched to HTTP fallback mode.");
-        return;
-      }
-      reconnectTimer.current = setTimeout(() => {
-        if (!unmountedRef.current) connect();
-      }, 4000);
+      if (unmountedRef.current || httpFallback) return;
+      enableHttpFallback();
     };
 
     ws.onerror = () => {
-      setWsStatus("error");
+      if (unmountedRef.current || httpFallback) return;
+      enableHttpFallback();
     };
-  }, [appendLog, httpFallback, id]);
+  }, [appendLog, enableHttpFallback, httpFallback, id]);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -181,6 +195,7 @@ export default function ServerConsole() {
     return () => {
       unmountedRef.current = true;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
       wsRef.current?.close();
     };
   }, [connect]);
@@ -192,7 +207,7 @@ export default function ServerConsole() {
       try {
         await fetchStats();
       } catch {
-        if (!cancelled && httpFallback && !logs.some((line) => line.includes("Stats polling unavailable"))) {
+        if (!cancelled && httpFallback) {
           appendLog("[Panel] Stats polling unavailable right now.");
         }
       }
@@ -204,7 +219,7 @@ export default function ServerConsole() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [appendLog, fetchStats, httpFallback, logs]);
+  }, [appendLog, fetchStats, httpFallback]);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -259,13 +274,7 @@ export default function ServerConsole() {
 
   const displayStatus = liveStatus ?? server?.status;
   const isRunning = displayStatus === "running";
-
-  const wsStatusLabel: Record<WsStatus, string> = {
-    connecting: "Connecting...",
-    connected: httpFallback ? "HTTP fallback" : "Live",
-    disconnected: httpFallback ? "HTTP fallback" : "Reconnecting...",
-    error: httpFallback ? "HTTP fallback" : "Connection error",
-  };
+  const canSend = httpFallback || wsRef.current?.readyState === WebSocket.OPEN;
 
   const wsStatusColor: Record<WsStatus, string> = {
     connecting: "text-yellow-400",
@@ -273,8 +282,6 @@ export default function ServerConsole() {
     disconnected: "text-yellow-400",
     error: httpFallback ? "text-blue-400" : "text-red-400",
   };
-
-  const canSend = httpFallback || wsRef.current?.readyState === WebSocket.OPEN;
 
   return (
     <ClientLayout title={`${server?.name ?? "Server"} — Console`}>
@@ -290,14 +297,8 @@ export default function ServerConsole() {
             )}
           </div>
           <div className={`flex items-center gap-1.5 text-xs ${httpFallback ? "text-blue-400" : wsStatusColor[wsStatus]}`}>
-            {wsStatus === "connecting" || wsStatus === "disconnected" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : wsStatus === "connected" ? (
-              <Wifi className="h-3.5 w-3.5" />
-            ) : (
-              <WifiOff className="h-3.5 w-3.5" />
-            )}
-            {httpFallback ? "HTTP fallback" : wsStatusLabel[wsStatus]}
+            {httpFallback ? <WifiOff className="h-3.5 w-3.5" /> : wsStatus === "connecting" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+            {httpFallback ? "HTTP fallback" : wsStatus === "connected" ? "Live" : "Connecting..."}
           </div>
         </div>
 
@@ -313,7 +314,7 @@ export default function ServerConsole() {
         <div className="rounded-lg border border-border bg-black/50 h-96 overflow-y-auto p-4 font-mono text-xs" data-testid="console-output">
           {logs.length === 0 ? (
             <span className="text-muted-foreground italic">
-              {httpFallback ? "HTTP fallback active. Live stream unavailable, but commands and stats still work." : wsStatus === "connecting" ? "Connecting to server console..." : "No output yet."}
+              {httpFallback ? "HTTP fallback active. Live stream unavailable, but commands and stats still work." : "Connecting to server console..."}
             </span>
           ) : (
             logs.map((line, i) => (
@@ -349,12 +350,6 @@ export default function ServerConsole() {
             Send
           </button>
         </form>
-
-        {wsStatus === "error" && !httpFallback && (
-          <p className="text-xs text-red-400">
-            Console connection failed. Check that the server is reachable and your session is valid.
-          </p>
-        )}
       </div>
     </ClientLayout>
   );
