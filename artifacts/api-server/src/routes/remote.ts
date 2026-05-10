@@ -2,11 +2,11 @@
  * Remote API — daemon-to-panel callbacks
  *
  * These routes are called by Wings (or any compatible daemon), not by the
- * browser client.  Authentication is a short-lived HS256 JWT signed with the
- * node's daemonToken (same secret Wings uses in its own config.yml).
+ * browser client. Authentication is a short-lived HS256 JWT signed with the
+ * node's daemonToken (same secret the daemon uses in its own config).
  *
- * Endpoints mirror the Pterodactyl remote API so Wings works unmodified:
- *   POST /api/remote/servers/:uuid/install   — install-complete callback
+ * Note: this router is mounted under /api by the main route index, so paths
+ * here must be relative (do not prefix them with /api again).
  */
 
 import { Router } from "express";
@@ -24,23 +24,13 @@ const InstallCallbackBody = z.object({
   reinstall: z.boolean().optional().default(false),
 });
 
-/**
- * POST /api/remote/servers/:uuid/install
- *
- * Wings calls this when the install script finishes.
- * Body: { successful: boolean, reinstall?: boolean }
- *
- * On success  → status = "offline"  (ready to start)
- * On failure  → status unchanged    (stays "installing"; admin must reinstall)
- */
 router.post(
-  "/api/remote/servers/:uuid/install",
+  "/remote/servers/:uuid/install",
   validateBody(InstallCallbackBody),
   asyncHandler(async (req, res) => {
     const { uuid } = req.params as { uuid: string };
     const { successful } = req.body as z.infer<typeof InstallCallbackBody>;
 
-    // Look up the server so we can find the node's signing secret.
     const [server] = await db
       .select()
       .from(serversTable)
@@ -51,7 +41,6 @@ router.post(
       return;
     }
 
-    // Fetch node to get its daemon token (the JWT signing secret).
     const [node] = await db
       .select()
       .from(nodesTable)
@@ -63,7 +52,6 @@ router.post(
       return;
     }
 
-    // Verify the Bearer JWT Wings attached to the request.
     const authHeader = req.headers.authorization ?? "";
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
     if (!bearer) {
@@ -78,15 +66,13 @@ router.post(
       return;
     }
 
-    // Advance status only if the server is still in "installing" state.
-    // If it was already moved (e.g. by a reinstall race), leave it alone.
     if (server.status === "installing") {
       if (successful) {
         await db
           .update(serversTable)
           .set({ status: "offline" })
           .where(eq(serversTable.uuid, uuid));
-        req.log.info({ serverId: server.id, uuid }, "[remote] Install completed — status → offline");
+        req.log.info({ serverId: server.id, uuid }, "[remote] Install completed — status -> offline");
       } else {
         req.log.warn({ serverId: server.id, uuid }, "[remote] Install reported as failed — status unchanged");
       }
