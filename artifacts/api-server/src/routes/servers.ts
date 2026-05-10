@@ -29,6 +29,10 @@ const PowerActionBody = z.object({
   action: z.enum(["start", "stop", "restart", "kill"]),
 });
 
+const SendCommandBody = z.object({
+  command: z.string().min(1),
+});
+
 const UpdateStartupBody = z.object({
   startup: z.string().optional(),
   variables: z.record(z.string(), z.string()).optional(),
@@ -93,12 +97,6 @@ router.post("/servers", requireAdmin, validateBody(CreateServerBody), asyncHandl
     description: `Server "${server.name}" created`,
   });
 
-  // Best-effort: send full server config to the daemon and trigger install.
-  // For a real Wings daemon the install is async — status stays "installing"
-  // until Wings POSTs back to /api/remote/servers/:uuid/install.
-  // For the mock provider (no daemon) the provision is synchronous, so we
-  // advance status to "offline" immediately so the server becomes usable.
-  // Non-fatal if the node is offline; admin can retry via reinstall later.
   try {
     const { providerServer } = await buildProviderServer(server.id);
     const provider = getProviderForNode(providerServer.node);
@@ -107,12 +105,9 @@ router.post("/servers", requireAdmin, validateBody(CreateServerBody), asyncHandl
       await db.update(serversTable).set({ status: "offline" }).where(eq(serversTable.id, server.id));
     }
   } catch (err) {
-    // Daemon unreachable or node not configured yet — server stays "installing"
     req.log.warn({ serverId: server.id, err }, "[servers] Daemon provisioning failed");
   }
 
-  // Re-fetch the server so the response reflects any status change made
-  // by the provision block above (e.g. mock provider sets it to "offline").
   const [fresh] = await db.select().from(serversTable).where(eq(serversTable.id, server.id));
   res.status(201).json(await formatServer(fresh ?? server));
 }));
@@ -177,13 +172,10 @@ router.delete("/servers/:id", requireAdmin, asyncHandler(async (req, res) => {
     return;
   }
 
-  // Best-effort: ask daemon to destroy the container and volumes before we
-  // remove the DB record.  Non-fatal — proceed with deletion regardless.
   try {
     const { providerServer } = await buildProviderServer(id);
     await getProviderForNode(providerServer.node).deleteServer(providerServer);
   } catch (err) {
-    // Daemon offline, node not configured, or server was never provisioned
     console.warn(`[servers] Daemon delete failed for server ${id}: ${err instanceof Error ? err.message : String(err)}`);
   }
 
@@ -217,6 +209,35 @@ router.post("/servers/:id/power", requireAuth, validateBody(PowerActionBody), as
   const { action } = req.body as z.infer<typeof PowerActionBody>;
   await executePowerAction(req, id, action);
   res.json({ message: `Power action '${action}' executed` });
+}));
+
+router.post("/servers/:id/command", requireAuth, validateBody(SendCommandBody), asyncHandler(async (req, res) => {
+  const id = parseIntParam(req, res, "id");
+  if (id === null) return;
+
+  const [server] = await db.select().from(serversTable).where(eq(serversTable.id, id));
+  if (!server) {
+    res.status(404).json({ error: "Server not found" });
+    return;
+  }
+  if (req.user?.role === "client" && server.userId !== req.user.userId) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  const { command } = req.body as z.infer<typeof SendCommandBody>;
+  const { providerServer } = await buildProviderServer(id);
+  await getProviderForNode(providerServer.node).sendCommand(providerServer, command);
+
+  await logActivity({
+    req,
+    userId: req.user?.userId,
+    serverId: id,
+    event: "server.command",
+    description: `Command sent to server "${server.name}": ${command}`,
+  });
+
+  res.json({ message: "Command sent" });
 }));
 
 router.post("/servers/:id/reinstall", requireAuth, asyncHandler(async (req, res) => {
