@@ -71,20 +71,45 @@ export default function ServerConsole() {
   const id = Number(params.id);
   const { data } = useGetServer({ id });
   const server = data?.data;
+  const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
   const [wsStatus, setWsStatus] = useState<WsStatus>("connecting");
   const [liveStatus, setLiveStatus] = useState<string | null>(null);
   const [stats, setStats] = useState<ServerStats | null>(null);
+  const [httpFallback, setHttpFallback] = useState(false);
+  const [sendingCommand, setSendingCommand] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
   const terminalErrorRef = useRef(false);
+  const failureCountRef = useRef(0);
+
+  const appendLog = useCallback((line: string) => {
+    setLogs((prev) => {
+      const next = [...prev, line];
+      return next.length > 500 ? next.slice(-500) : next;
+    });
+  }, []);
+
+  const fetchStats = useCallback(async () => {
+    const token = localStorage.getItem("egh_token");
+    if (!token || !id || Number.isNaN(id)) return;
+
+    const res = await fetch(`${apiBase}/api/servers/${id}/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const payload = await res.json() as ServerStats;
+    setStats(payload);
+    setLiveStatus(payload.state);
+  }, [apiBase, id]);
 
   const connect = useCallback(() => {
-    if (unmountedRef.current || terminalErrorRef.current) return;
+    if (unmountedRef.current || terminalErrorRef.current || httpFallback) return;
 
     const token = localStorage.getItem("egh_token");
     if (!token || !id || Number.isNaN(id)) {
@@ -99,7 +124,9 @@ export default function ServerConsole() {
 
     ws.onopen = () => {
       if (unmountedRef.current) { ws.close(); return; }
+      failureCountRef.current = 0;
       setWsStatus("connected");
+      appendLog("[Panel] Live console connected.");
     };
 
     ws.onmessage = (event) => {
@@ -108,10 +135,7 @@ export default function ServerConsole() {
         const msg = JSON.parse(event.data as string) as { type: string; data: unknown };
         switch (msg.type) {
           case "console":
-            setLogs((prev) => {
-              const next = [...prev, String(msg.data)];
-              return next.length > 500 ? next.slice(-500) : next;
-            });
+            appendLog(String(msg.data));
             break;
           case "status":
             setLiveStatus((msg.data as { status: string }).status);
@@ -123,6 +147,7 @@ export default function ServerConsole() {
           case "not_found":
             terminalErrorRef.current = true;
             setWsStatus("error");
+            appendLog(`[Panel] Console error: ${String(msg.data)}`);
             ws.close();
             break;
         }
@@ -134,6 +159,12 @@ export default function ServerConsole() {
     ws.onclose = () => {
       if (unmountedRef.current) return;
       setWsStatus("disconnected");
+      failureCountRef.current += 1;
+      if (failureCountRef.current >= 3) {
+        setHttpFallback(true);
+        appendLog("[Panel] Live console websocket unavailable. Switched to HTTP fallback mode.");
+        return;
+      }
       reconnectTimer.current = setTimeout(() => {
         if (!unmountedRef.current) connect();
       }, 4000);
@@ -142,7 +173,7 @@ export default function ServerConsole() {
     ws.onerror = () => {
       setWsStatus("error");
     };
-  }, [id]);
+  }, [appendLog, httpFallback, id]);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -155,15 +186,75 @@ export default function ServerConsole() {
   }, [connect]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function tick() {
+      try {
+        await fetchStats();
+      } catch {
+        if (!cancelled && httpFallback && !logs.some((line) => line.includes("Stats polling unavailable"))) {
+          appendLog("[Panel] Stats polling unavailable right now.");
+        }
+      }
+    }
+
+    tick();
+    const interval = window.setInterval(tick, httpFallback ? 5000 : 10000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [appendLog, fetchStats, httpFallback, logs]);
+
+  useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  function sendCommand(e: React.FormEvent) {
+  async function sendHttpCommand(cmd: string) {
+    const token = localStorage.getItem("egh_token");
+    if (!token) throw new Error("Missing auth token");
+
+    const res = await fetch(`${apiBase}/api/servers/${id}/command`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      credentials: "include",
+      body: JSON.stringify({ command: cmd }),
+    });
+
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try {
+        const payload = await res.json() as { error?: string; message?: string };
+        message = payload.error ?? payload.message ?? message;
+      } catch {
+        // ignore parse errors
+      }
+      throw new Error(message);
+    }
+  }
+
+  async function sendCommand(e: React.FormEvent) {
     e.preventDefault();
     const cmd = command.trim();
-    if (!cmd || wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ event: "send_command", args: [cmd] }));
-    setCommand("");
+    if (!cmd) return;
+
+    try {
+      setSendingCommand(true);
+      if (!httpFallback && wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ event: "send_command", args: [cmd] }));
+      } else {
+        await sendHttpCommand(cmd);
+      }
+      appendLog(`> ${cmd}`);
+      setCommand("");
+    } catch (err) {
+      appendLog(`[Panel] Failed to send command: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setSendingCommand(false);
+    }
   }
 
   const displayStatus = liveStatus ?? server?.status;
@@ -171,22 +262,23 @@ export default function ServerConsole() {
 
   const wsStatusLabel: Record<WsStatus, string> = {
     connecting: "Connecting...",
-    connected: "Live",
-    disconnected: "Reconnecting...",
-    error: "Connection error",
+    connected: httpFallback ? "HTTP fallback" : "Live",
+    disconnected: httpFallback ? "HTTP fallback" : "Reconnecting...",
+    error: httpFallback ? "HTTP fallback" : "Connection error",
   };
 
   const wsStatusColor: Record<WsStatus, string> = {
     connecting: "text-yellow-400",
     connected: "text-green-400",
     disconnected: "text-yellow-400",
-    error: "text-red-400",
+    error: httpFallback ? "text-blue-400" : "text-red-400",
   };
+
+  const canSend = httpFallback || wsRef.current?.readyState === WebSocket.OPEN;
 
   return (
     <ClientLayout title={`${server?.name ?? "Server"} — Console`}>
       <div className="space-y-4">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Terminal className="h-5 w-5 text-primary" />
@@ -197,7 +289,7 @@ export default function ServerConsole() {
               </span>
             )}
           </div>
-          <div className={`flex items-center gap-1.5 text-xs ${wsStatusColor[wsStatus]}`}>
+          <div className={`flex items-center gap-1.5 text-xs ${httpFallback ? "text-blue-400" : wsStatusColor[wsStatus]}`}>
             {wsStatus === "connecting" || wsStatus === "disconnected" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : wsStatus === "connected" ? (
@@ -205,65 +297,27 @@ export default function ServerConsole() {
             ) : (
               <WifiOff className="h-3.5 w-3.5" />
             )}
-            {wsStatusLabel[wsStatus]}
+            {httpFallback ? "HTTP fallback" : wsStatusLabel[wsStatus]}
           </div>
         </div>
 
-        {/* Live stats bar — shown once stats start arriving */}
         {stats && (
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-card p-4 sm:grid-cols-4" data-testid="console-stats">
-            <StatBar
-              label="CPU"
-              icon={Cpu}
-              value={stats.cpuAbsolute}
-              max={100}
-              formatted={`${stats.cpuAbsolute.toFixed(1)}%`}
-            />
-            <StatBar
-              label="Memory"
-              icon={MemoryStick}
-              value={stats.memoryBytes}
-              max={stats.memoryLimitBytes}
-              formatted={`${formatBytes(stats.memoryBytes)} / ${formatBytes(stats.memoryLimitBytes)}`}
-            />
-            <StatBar
-              label="Disk"
-              icon={HardDrive}
-              value={stats.diskBytes}
-              formatted={formatBytes(stats.diskBytes)}
-            />
-            <StatBar
-              label="Uptime"
-              icon={Activity}
-              value={stats.uptime}
-              formatted={formatUptime(stats.uptime)}
-            />
+            <StatBar label="CPU" icon={Cpu} value={stats.cpuAbsolute} max={100} formatted={`${stats.cpuAbsolute.toFixed(1)}%`} />
+            <StatBar label="Memory" icon={MemoryStick} value={stats.memoryBytes} max={stats.memoryLimitBytes} formatted={`${formatBytes(stats.memoryBytes)} / ${formatBytes(stats.memoryLimitBytes)}`} />
+            <StatBar label="Disk" icon={HardDrive} value={stats.diskBytes} formatted={formatBytes(stats.diskBytes)} />
+            <StatBar label="Uptime" icon={Activity} value={stats.uptime} formatted={formatUptime(stats.uptime)} />
           </div>
         )}
 
-        {/* Console output */}
-        <div
-          className="rounded-lg border border-border bg-black/50 h-96 overflow-y-auto p-4 font-mono text-xs"
-          data-testid="console-output"
-        >
+        <div className="rounded-lg border border-border bg-black/50 h-96 overflow-y-auto p-4 font-mono text-xs" data-testid="console-output">
           {logs.length === 0 ? (
             <span className="text-muted-foreground italic">
-              {wsStatus === "connecting" ? "Connecting to server console..." : "No output yet."}
+              {httpFallback ? "HTTP fallback active. Live stream unavailable, but commands and stats still work." : wsStatus === "connecting" ? "Connecting to server console..." : "No output yet."}
             </span>
           ) : (
             logs.map((line, i) => (
-              <div
-                key={i}
-                className={`leading-5 ${
-                  line.startsWith(">") || line.includes("[CMD]")
-                    ? "text-yellow-300"
-                    : line.includes("ERROR") || line.includes("error")
-                    ? "text-red-400"
-                    : line.includes("WARN")
-                    ? "text-yellow-400"
-                    : "text-green-300"
-                }`}
-              >
+              <div key={i} className={`leading-5 ${line.startsWith(">") || line.includes("[CMD]") ? "text-yellow-300" : line.includes("ERROR") || line.includes("error") ? "text-red-400" : line.includes("WARN") ? "text-yellow-400" : "text-green-300"}`}>
                 {line}
               </div>
             ))
@@ -271,16 +325,15 @@ export default function ServerConsole() {
           <div ref={logEndRef} />
         </div>
 
-        {/* Command input */}
         <form onSubmit={sendCommand} className="flex gap-2">
           <div className="relative flex-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-400 font-mono text-sm">$</span>
             <input
               type="text"
-              placeholder={wsStatus !== "connected" ? "Waiting for connection..." : "Enter server command..."}
+              placeholder={!canSend ? "Waiting for connection..." : httpFallback ? "Enter server command (HTTP fallback)..." : "Enter server command..."}
               value={command}
               onChange={(e) => setCommand(e.target.value)}
-              disabled={wsStatus !== "connected"}
+              disabled={!canSend || sendingCommand}
               className="w-full rounded-md border border-border bg-black/40 pl-8 pr-3 py-2.5 text-sm font-mono text-green-400 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
               data-testid="input-console-command"
               autoComplete="off"
@@ -288,16 +341,16 @@ export default function ServerConsole() {
           </div>
           <button
             type="submit"
-            disabled={!command.trim() || wsStatus !== "connected"}
+            disabled={!command.trim() || !canSend || sendingCommand}
             className="flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50 transition-colors"
             data-testid="button-send-command"
           >
-            <Send className="h-4 w-4" />
+            {sendingCommand ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Send
           </button>
         </form>
 
-        {wsStatus === "error" && (
+        {wsStatus === "error" && !httpFallback && (
           <p className="text-xs text-red-400">
             Console connection failed. Check that the server is reachable and your session is valid.
           </p>
