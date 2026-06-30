@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Activity, Boxes, Cpu, HardDrive, Network, Server } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { getHealth, getNodes, getServers } from './api.js';
@@ -14,7 +15,7 @@ export function App() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <section className="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-8">
-        <header className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-purple-950/20 lg:flex-row lg:items-center lg:justify-between">
+        <header className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/[0.03] p-8 shadow-2xl lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-purple-300">EGH Panel</p>
             <h1 className="mt-3 text-4xl font-bold tracking-tight text-white">Clean game hosting control panel</h1>
@@ -76,7 +77,7 @@ export function App() {
   );
 }
 
-function StatCard(props: { icon: React.ReactNode; label: string; value: string; detail: string }) {
+function StatCard(props: { icon: ReactNode; label: string; value: string; detail: string }) {
   return (
     <article className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
       <div className="flex items-center justify-between text-purple-200">
@@ -89,7 +90,7 @@ function StatCard(props: { icon: React.ReactNode; label: string; value: string; 
   );
 }
 
-function PanelCard(props: { title: string; description: string; children: React.ReactNode }) {
+function PanelCard(props: { title: string; description: string; children: ReactNode }) {
   return (
     <article className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
       <div className="mb-5">
