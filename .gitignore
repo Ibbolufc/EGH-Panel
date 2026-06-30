@@ -5,40 +5,33 @@
 
 # dependencies
 node_modules
+.pnpm-store
 
 # build output
 dist
-tmp
-out-tsc
+build
+coverage
+.vite
 *.tsbuildinfo
 
-# editor files
+# logs
+*.log
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# editors
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
 .idea
-.project
-.classpath
-.settings/
 
-# misc
-.coverage
-coverage
-.cache
-.local
-.sass-cache
-connect.lock
-npm-debug.log
-yarn-error.log
-testem.log
-libpeerconnection.log
-
-# system files
+# system
 .DS_Store
 Thumbs.db
 
-# Replit / Cursor
+# old AI/editor clutter
 .cursor/
 .replit
