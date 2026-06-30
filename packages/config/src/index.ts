@@ -13,7 +13,7 @@ export const PanelEnvSchema = z.object({
 
 export type PanelEnv = z.infer<typeof PanelEnvSchema>;
 
-export function parsePanelEnv(source: NodeJS.ProcessEnv): PanelEnv {
+export function parsePanelEnv(source: Record<string, string | undefined>): PanelEnv {
   const parsed = PanelEnvSchema.safeParse(source);
 
   if (!parsed.success) {
