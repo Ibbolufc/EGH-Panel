@@ -45,6 +45,7 @@ select {
 .mb-5 { margin-bottom: 1.25rem; }
 .flex { display: flex; }
 .grid { display: grid; }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .items-center { align-items: center; }
 .items-start { align-items: flex-start; }
 .justify-between { justify-content: space-between; }
